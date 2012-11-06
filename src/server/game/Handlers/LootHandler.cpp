@@ -29,8 +29,9 @@
 #include "Group.h"
 #include "World.h"
 #include "Util.h"
+#include "GuildMgr.h"
 
-void WorldSession::HandleAutostoreLootItemOpcode(WorldPacket & recv_data)
+void WorldSession::HandleAutostoreLootItemOpcode(WorldPacket & recvData)
 {
     sLog->outDebug(LOG_FILTER_NETWORKIO, "WORLD: CMSG_AUTOSTORE_LOOT_ITEM");
     Player* player = GetPlayer();
@@ -38,7 +39,7 @@ void WorldSession::HandleAutostoreLootItemOpcode(WorldPacket & recv_data)
     Loot* loot = NULL;
     uint8 lootSlot = 0;
 
-    recv_data >> lootSlot;
+    recvData >> lootSlot;
 
     if (IS_GAMEOBJECT_GUID(lguid))
     {
@@ -94,7 +95,7 @@ void WorldSession::HandleAutostoreLootItemOpcode(WorldPacket & recv_data)
     player->StoreLootItem(lootSlot, loot);
 }
 
-void WorldSession::HandleLootMoneyOpcode(WorldPacket & /*recv_data*/)
+void WorldSession::HandleLootMoneyOpcode(WorldPacket& /*recvData*/)
 {
     sLog->outDebug(LOG_FILTER_NETWORKIO, "WORLD: CMSG_LOOT_MONEY");
 
@@ -181,9 +182,13 @@ void WorldSession::HandleLootMoneyOpcode(WorldPacket & /*recv_data*/)
                 (*i)->ModifyMoney(goldPerPlayer);
                 (*i)->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_LOOT_MONEY, goldPerPlayer);
 
+                if (Guild* guild = sGuildMgr->GetGuildById((*i)->GetGuildId()))
+                    if (uint32 guildGold = CalculatePct(goldPerPlayer, (*i)->GetTotalAuraModifier(SPELL_AURA_DEPOSIT_BONUS_MONEY_IN_GUILD_BANK_ON_LOOT)))
+                        guild->HandleMemberDepositMoney(this, guildGold, true);
+
                 WorldPacket data(SMSG_LOOT_MONEY_NOTIFY, 4 + 1);
                 data << uint32(goldPerPlayer);
-                data << uint8(playersNear.size() > 1 ? 0 : 1);     // Controls the text displayed in chat. 0 is "Your share is..." and 1 is "You loot..."
+                data << uint8(playersNear.size() <= 1); // Controls the text displayed in chat. 0 is "Your share is..." and 1 is "You loot..."
                 (*i)->GetSession()->SendPacket(&data);
             }
         }
@@ -191,6 +196,10 @@ void WorldSession::HandleLootMoneyOpcode(WorldPacket & /*recv_data*/)
         {
             player->ModifyMoney(loot->gold);
             player->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_LOOT_MONEY, loot->gold);
+
+            if (Guild* guild = sGuildMgr->GetGuildById(player->GetGuildId()))
+                if (uint32 guildGold = CalculatePct(loot->gold, player->GetTotalAuraModifier(SPELL_AURA_DEPOSIT_BONUS_MONEY_IN_GUILD_BANK_ON_LOOT)))
+                    guild->HandleMemberDepositMoney(this, guildGold, true);
 
             WorldPacket data(SMSG_LOOT_MONEY_NOTIFY, 4 + 1);
             data << uint32(loot->gold);
@@ -202,12 +211,12 @@ void WorldSession::HandleLootMoneyOpcode(WorldPacket & /*recv_data*/)
     }
 }
 
-void WorldSession::HandleLootOpcode(WorldPacket & recv_data)
+void WorldSession::HandleLootOpcode(WorldPacket & recvData)
 {
     sLog->outDebug(LOG_FILTER_NETWORKIO, "WORLD: CMSG_LOOT");
 
     uint64 guid;
-    recv_data >> guid;
+    recvData >> guid;
 
     // Check possible cheat
     if (!_player->isAlive())
@@ -428,12 +437,12 @@ void WorldSession::DoLootRelease(uint64 lguid)
     loot->RemoveLooter(player->GetGUID());
 }
 
-void WorldSession::HandleLootMasterGiveOpcode(WorldPacket & recv_data)
+void WorldSession::HandleLootMasterGiveOpcode(WorldPacket& recvData)
 {
     uint8 slotid;
     uint64 lootguid, target_playerguid;
 
-    recv_data >> lootguid >> slotid >> target_playerguid;
+    recvData >> lootguid >> slotid >> target_playerguid;
 
     if (!_player->GetGroup() || _player->GetGroup()->GetLooterGuid() != _player->GetGUID())
     {
@@ -445,7 +454,7 @@ void WorldSession::HandleLootMasterGiveOpcode(WorldPacket & recv_data)
     if (!target)
         return;
 
-    sLog->outDebug(LOG_FILTER_NETWORKIO, "WorldSession::HandleLootMasterGiveOpcode (CMSG_LOOT_MASTER_GIVE, 0x02A3) Target = [%s].", target->GetName());
+    sLog->outDebug(LOG_FILTER_NETWORKIO, "WorldSession::HandleLootMasterGiveOpcode (CMSG_LOOT_MASTER_GIVE, 0x02A3) Target = [%s].", target->GetName().c_str());
 
     if (_player->GetLootGUID() != lootguid)
         return;
@@ -474,7 +483,8 @@ void WorldSession::HandleLootMasterGiveOpcode(WorldPacket & recv_data)
 
     if (slotid >= loot->items.size() + loot->quest_items.size())
     {
-        sLog->outDebug(LOG_FILTER_LOOT, "MasterLootItem: Player %s might be using a hack! (slot %d, size %lu)", GetPlayer()->GetName(), slotid, (unsigned long)loot->items.size());
+        sLog->outDebug(LOG_FILTER_LOOT, "MasterLootItem: Player %s might be using a hack! (slot %d, size %lu)",
+            GetPlayer()->GetName().c_str(), slotid, (unsigned long)loot->items.size());
         return;
     }
 
@@ -483,7 +493,7 @@ void WorldSession::HandleLootMasterGiveOpcode(WorldPacket & recv_data)
     ItemPosCountVec dest;
     InventoryResult msg = target->CanStoreNewItem(NULL_BAG, NULL_SLOT, dest, item.itemid, item.count);
     if (item.follow_loot_rules && !item.AllowedForPlayer(target))
-        msg = EQUIP_ERR_YOU_CAN_NEVER_USE_THAT_ITEM;
+        msg = EQUIP_ERR_CANT_EQUIP_EVER;
     if (msg != EQUIP_ERR_OK)
     {
         target->SendEquipError(msg, NULL, NULL, item.itemid);

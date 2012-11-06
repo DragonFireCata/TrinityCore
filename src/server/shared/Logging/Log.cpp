@@ -88,8 +88,8 @@ void Log::CreateAppenderFromConfig(const char* name)
     std::string options = "Appender.";
     options.append(name);
     options = ConfigMgr::GetStringDefault(options.c_str(), "");
-    Tokens tokens(options, ',');
-    Tokens::iterator iter = tokens.begin();
+    Tokenizer tokens(options, ',');
+    Tokenizer::const_iterator iter = tokens.begin();
 
     if (tokens.size() < 2)
     {
@@ -181,8 +181,8 @@ void Log::CreateLoggerFromConfig(const char* name)
         return;
     }
 
-    Tokens tokens(options, ',');
-    Tokens::iterator iter = tokens.begin();
+    Tokenizer tokens(options, ',');
+    Tokenizer::const_iterator iter = tokens.begin();
 
     if (tokens.size() != 3)
     {
@@ -435,10 +435,10 @@ void Log::outCharDump(char const* str, uint32 accountId, uint32 guid, char const
        << ")\n" << str << "\n== END DUMP ==\n";
 
     LogMessage* msg = new LogMessage(LOG_LEVEL_INFO, LOG_FILTER_PLAYER_DUMP, ss.str());
-    ss.clear();
-    ss << guid << '_' << name;
+    std::ostringstream param;
+    param << guid << '_' << name;
 
-    msg->param1 = ss.str();
+    msg->param1 = param.str();
 
     write(msg);
 }

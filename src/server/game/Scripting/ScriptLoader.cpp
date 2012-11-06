@@ -61,6 +61,7 @@ void AddSC_guild_commandscript();
 void AddSC_honor_commandscript();
 void AddSC_instance_commandscript();
 void AddSC_learn_commandscript();
+void AddSC_lfg_commandscript();
 void AddSC_list_commandscript();
 void AddSC_lookup_commandscript();
 void AddSC_message_commandscript();
@@ -89,6 +90,7 @@ void AddSC_npc_innkeeper();
 void AddSC_npcs_special();
 void AddSC_npc_taxi();
 void AddSC_achievement_scripts();
+void AddSC_event_scripts();
 
 //eastern kingdoms
 void AddSC_alterac_valley();                 //Alterac Valley
@@ -229,25 +231,19 @@ void AddSC_boss_nalorakk();
 void AddSC_boss_zuljin();
 void AddSC_instance_zulaman();
 void AddSC_zulaman();
-void AddSC_boss_jeklik();                    //Zul'Gurub
-void AddSC_boss_venoxis();
-void AddSC_boss_marli();
-void AddSC_boss_mandokir();
-void AddSC_boss_gahzranka();
-void AddSC_boss_thekal();
-void AddSC_boss_arlokk();
-void AddSC_boss_jindo();
-void AddSC_boss_hakkar();
-void AddSC_boss_grilek();
+void AddSC_boss_grilek();                   // Zul'Gurub
 void AddSC_boss_hazzarah();
+void AddSC_boss_jindo_the_godbreaker();
+void AddSC_boss_kilnara();
+void AddSC_boss_mandokir();
 void AddSC_boss_renataki();
+void AddSC_boss_venoxis();
 void AddSC_boss_wushoolay();
+void AddSC_boss_zanzil();
 void AddSC_instance_zulgurub();
-
 //void AddSC_alterac_mountains();
 void AddSC_arathi_highlands();
 void AddSC_blasted_lands();
-void AddSC_boss_kruul();
 void AddSC_burning_steppes();
 void AddSC_duskwood();
 void AddSC_eastern_plaguelands();
@@ -337,7 +333,6 @@ void AddSC_ashenvale();
 void AddSC_azshara();
 void AddSC_azuremyst_isle();
 void AddSC_bloodmyst_isle();
-void AddSC_boss_azuregos();
 void AddSC_darkshore();
 void AddSC_desolace();
 void AddSC_durotar();
@@ -502,6 +497,7 @@ void AddSC_ruby_sanctum();
 void AddSC_boss_baltharus_the_warborn();
 void AddSC_boss_saviana_ragefire();
 void AddSC_boss_general_zarithrian();
+void AddSC_boss_halion();
 
 void AddSC_dalaran();
 void AddSC_borean_tundra();
@@ -602,7 +598,6 @@ void AddSC_zangarmarsh();
 // battlegrounds
 
 // outdoor pvp
-void AddSC_outdoorpvp_ep();
 void AddSC_outdoorpvp_hp();
 void AddSC_outdoorpvp_na();
 void AddSC_outdoorpvp_si();
@@ -680,6 +675,7 @@ void AddCommandScripts()
     AddSC_instance_commandscript();
     AddSC_learn_commandscript();
     AddSC_lookup_commandscript();
+    AddSC_lfg_commandscript();
     AddSC_list_commandscript();
     AddSC_message_commandscript();
     AddSC_misc_commandscript();
@@ -710,6 +706,7 @@ void AddWorldScripts()
     AddSC_npc_taxi();
     AddSC_achievement_scripts();
     AddSC_chat_log();
+    AddSC_event_scripts();
 #endif
 }
 
@@ -854,25 +851,20 @@ void AddEasternKingdomsScripts()
     AddSC_boss_zuljin();
     AddSC_instance_zulaman();
     AddSC_zulaman();
-    AddSC_boss_jeklik();                    //Zul'Gurub
-    AddSC_boss_venoxis();
-    AddSC_boss_marli();
-    AddSC_boss_mandokir();
-    AddSC_boss_gahzranka();
-    AddSC_boss_thekal();
-    AddSC_boss_arlokk();
-    AddSC_boss_jindo();
-    AddSC_boss_hakkar();
-    AddSC_boss_grilek();
+    AddSC_boss_grilek();                    // Zul'Gurub
     AddSC_boss_hazzarah();
+    AddSC_boss_jindo_the_godbreaker();
+    AddSC_boss_kilnara();
+    AddSC_boss_mandokir();
     AddSC_boss_renataki();
+    AddSC_boss_venoxis();
     AddSC_boss_wushoolay();
+    AddSC_boss_zanzil();
     AddSC_instance_zulgurub();
 
     //AddSC_alterac_mountains();
     AddSC_arathi_highlands();
     AddSC_blasted_lands();
-    AddSC_boss_kruul();
     AddSC_burning_steppes();
     AddSC_duskwood();
     AddSC_eastern_plaguelands();
@@ -966,7 +958,6 @@ void AddKalimdorScripts()
     AddSC_azshara();
     AddSC_azuremyst_isle();
     AddSC_bloodmyst_isle();
-    AddSC_boss_azuregos();
     AddSC_darkshore();
     AddSC_desolace();
     AddSC_durotar();
@@ -1222,6 +1213,7 @@ void AddNorthrendScripts()
     AddSC_boss_baltharus_the_warborn();
     AddSC_boss_saviana_ragefire();
     AddSC_boss_general_zarithrian();
+    AddSC_boss_halion();
 
     AddSC_dalaran();
     AddSC_borean_tundra();
@@ -1241,7 +1233,6 @@ void AddNorthrendScripts()
 void AddOutdoorPvPScripts()
 {
 #ifdef SCRIPTS
-    AddSC_outdoorpvp_ep();
     AddSC_outdoorpvp_hp();
     AddSC_outdoorpvp_na();
     AddSC_outdoorpvp_si();

@@ -39,11 +39,11 @@ enum SpellCastFlags
 {
     CAST_FLAG_NONE               = 0x00000000,
     CAST_FLAG_PENDING            = 0x00000001,              // aoe combat log?
-    CAST_FLAG_UNKNOWN_2          = 0x00000002,
+    CAST_FLAG_HAS_TRAJECTORY     = 0x00000002,
     CAST_FLAG_UNKNOWN_3          = 0x00000004,
     CAST_FLAG_UNKNOWN_4          = 0x00000008,              // ignore AOE visual
     CAST_FLAG_UNKNOWN_5          = 0x00000010,
-    CAST_FLAG_AMMO               = 0x00000020,              // Projectiles visual
+    CAST_FLAG_PROJECTILE         = 0x00000020,
     CAST_FLAG_UNKNOWN_7          = 0x00000040,
     CAST_FLAG_UNKNOWN_8          = 0x00000080,
     CAST_FLAG_UNKNOWN_9          = 0x00000100,
@@ -68,7 +68,7 @@ enum SpellCastFlags
     CAST_FLAG_UNKNOWN_28         = 0x08000000,
     CAST_FLAG_UNKNOWN_29         = 0x10000000,
     CAST_FLAG_UNKNOWN_30         = 0x20000000,
-    CAST_FLAG_UNKNOWN_31         = 0x40000000,
+    CAST_FLAG_HEAL_PREDICTION    = 0x40000000,
     CAST_FLAG_UNKNOWN_32         = 0x80000000
 };
 
@@ -154,8 +154,8 @@ class SpellCastTargets
         void SetSpeed(float speed) { m_speed = speed; }
 
         float GetDist2d() const { return m_src._position.GetExactDist2d(&m_dst._position); }
-        float GetSpeedXY() const { return m_speed * cos(m_elevation); }
-        float GetSpeedZ() const { return m_speed * sin(m_elevation); }
+        float GetSpeedXY() const { return m_speed * std::cos(m_elevation); }
+        float GetSpeedZ() const { return m_speed * std::sin(m_elevation); }
 
         void Update(Unit* caster);
         void OutDebug() const;
@@ -252,7 +252,7 @@ class Spell
         void EffectQuestClear(SpellEffIndex effIndex);
         void EffectTeleUnitsFaceCaster(SpellEffIndex effIndex);
         void EffectLearnSkill(SpellEffIndex effIndex);
-        void EffectAddHonor(SpellEffIndex effIndex);
+        void EffectPlayMovie(SpellEffIndex effIndex);
         void EffectTradeSkill(SpellEffIndex effIndex);
         void EffectEnchantItemPerm(SpellEffIndex effIndex);
         void EffectEnchantItemTmp(SpellEffIndex effIndex);
@@ -396,6 +396,7 @@ class Spell
         SpellCastResult CheckPower();
         SpellCastResult CheckRuneCost(uint32 runeCostID);
         SpellCastResult CheckCasterAuras() const;
+        SpellCastResult CheckArenaAndRatedBattlegroundCastRules();
 
         int32 CalculateDamage(uint8 i, Unit const* target) const { return m_caster->CalculateSpellDamage(target, m_spellInfo, i, &m_spellValue->EffectBasePoints[i]); }
 
@@ -407,7 +408,6 @@ class Spell
 
         void DoCreateItem(uint32 i, uint32 itemtype);
         void WriteSpellGoTargets(WorldPacket* data);
-        void WriteAmmoToPacket(WorldPacket* data);
 
         bool CheckEffectTarget(Unit const* target, uint32 eff) const;
         bool CanAutoCast(Unit* target);
@@ -423,7 +423,7 @@ class Spell
         void ExecuteLogEffectTakeTargetPower(uint8 effIndex, Unit* target, uint32 powerType, uint32 powerTaken, float gainMultiplier);
         void ExecuteLogEffectExtraAttacks(uint8 effIndex, Unit* victim, uint32 attCount);
         void ExecuteLogEffectInterruptCast(uint8 effIndex, Unit* victim, uint32 spellId);
-        void ExecuteLogEffectDurabilityDamage(uint8 effIndex, Unit* victim, uint32 itemslot, uint32 damage);
+        void ExecuteLogEffectDurabilityDamage(uint8 effIndex, Unit* victim, int32 itemId, int32 slot);
         void ExecuteLogEffectOpenLock(uint8 effIndex, Object* obj);
         void ExecuteLogEffectCreateItem(uint8 effIndex, uint32 entry);
         void ExecuteLogEffectDestroyItem(uint8 effIndex, uint32 entry);
@@ -435,6 +435,7 @@ class Spell
         void SendChannelStart(uint32 duration);
         void SendResurrectRequest(Player* target);
 
+        void HandleHolyPower(Player* caster);
         void HandleEffects(Unit* pUnitTarget, Item* pItemTarget, GameObject* pGOTarget, uint32 i, SpellEffectHandleMode mode);
         void HandleThreatSpells();
 

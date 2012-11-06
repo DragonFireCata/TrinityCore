@@ -24,6 +24,7 @@
 #include "ScriptMgr.h"
 #include "SpellScript.h"
 #include "SpellAuraEffects.h"
+#include "Containers.h"
 
 enum DruidSpells
 {
@@ -146,6 +147,129 @@ class spell_dru_insect_swarm : public SpellScriptLoader
         }
 };
 
+enum EclipseSpells
+{
+    SPELL_DRUID_WRATH                    = 5176,
+    SPELL_DRUID_STARFIRE                 = 2912,
+    SPELL_DRUID_STARSURGE                = 78674,
+    SPELL_DRUID_ECLIPSE_GENERAL_ENERGIZE = 89265,
+    SPELL_DRUID_STARSURGE_ENERGIZE       = 86605,
+    SPELL_DRUID_LUNAR_ECLIPSE_MARKER     = 67484, // Will make the yellow arrow on eclipse bar point to the blue side (lunar)
+    SPELL_DRUID_SOLAR_ECLIPSE_MARKER     = 67483, // Will make the yellow arrow on eclipse bar point to the yellow side (solar)
+    SPELL_DRUID_SOLAR_ECLIPSE            = 48517,
+    SPELL_DRUID_LUNAR_ECLIPSE            = 48518,
+};
+
+// Wrath, Starfire, and Starsurge
+class spell_dru_eclipse_energize : public SpellScriptLoader
+{
+public:
+    spell_dru_eclipse_energize() : SpellScriptLoader("spell_dru_eclipse_energize") { }
+
+    class spell_dru_eclipse_energize_SpellScript : public SpellScript
+    {
+        PrepareSpellScript(spell_dru_eclipse_energize_SpellScript);
+
+        int32 energizeAmount;
+
+        bool Load()
+        {
+            if (GetCaster()->GetTypeId() != TYPEID_PLAYER)
+                return false;
+
+            if (GetCaster()->ToPlayer()->getClass() != CLASS_DRUID)
+                return false;
+
+            energizeAmount = 0;
+
+            return true;
+        }
+
+        void HandleEnergize(SpellEffIndex effIndex)
+        {
+            Player* caster = GetCaster()->ToPlayer();
+
+            // No boomy, no deal.
+            if (caster->GetPrimaryTalentTree(caster->GetActiveSpec()) != TALENT_TREE_DRUID_BALANCE)
+                return;
+
+            switch(GetSpellInfo()->Id)
+            {
+                case SPELL_DRUID_WRATH:
+                {
+                    energizeAmount = -GetSpellInfo()->Effects[effIndex].BasePoints; // -13
+                    // If we are set to fill the lunar side or we've just logged in with 0 power..
+                    if ((!caster->HasAura(SPELL_DRUID_SOLAR_ECLIPSE_MARKER) && caster->HasAura(SPELL_DRUID_LUNAR_ECLIPSE_MARKER))
+                        || caster->GetPower(POWER_ECLIPSE) == 0)
+                    {
+                        caster->CastCustomSpell(caster,SPELL_DRUID_ECLIPSE_GENERAL_ENERGIZE,&energizeAmount,0,0,true);
+                        // If the energize was due to 0 power, cast the eclipse marker aura
+                        if (!caster->HasAura(SPELL_DRUID_LUNAR_ECLIPSE_MARKER))
+                            caster->CastSpell(caster,SPELL_DRUID_LUNAR_ECLIPSE_MARKER,true);
+                    }
+                    // The energizing effect brought us out of the solar eclipse, remove the aura
+                    if (caster->HasAura(SPELL_DRUID_SOLAR_ECLIPSE) && caster->GetPower(POWER_ECLIPSE) <= 0)
+                        caster->RemoveAurasDueToSpell(SPELL_DRUID_SOLAR_ECLIPSE);
+                    break;
+                }
+                case SPELL_DRUID_STARFIRE:
+                {
+                    energizeAmount = GetSpellInfo()->Effects[effIndex].BasePoints; // 20
+                    // If we are set to fill the solar side or we've just logged in with 0 power..
+                    if ((!caster->HasAura(SPELL_DRUID_LUNAR_ECLIPSE_MARKER) && caster->HasAura(SPELL_DRUID_SOLAR_ECLIPSE_MARKER))
+                        || caster->GetPower(POWER_ECLIPSE) == 0)
+                    {
+                        caster->CastCustomSpell(caster,SPELL_DRUID_ECLIPSE_GENERAL_ENERGIZE,&energizeAmount,0,0,true);
+                        // If the energize was due to 0 power, cast the eclipse marker aura
+                        if (!caster->HasAura(SPELL_DRUID_SOLAR_ECLIPSE_MARKER))
+                            caster->CastSpell(caster,SPELL_DRUID_SOLAR_ECLIPSE_MARKER,true);
+                    }
+                    // The energizing effect brought us out of the lunar eclipse, remove the aura
+                    if (caster->HasAura(SPELL_DRUID_LUNAR_ECLIPSE) && caster->GetPower(POWER_ECLIPSE) >= 0)
+                        caster->RemoveAura(SPELL_DRUID_LUNAR_ECLIPSE);
+                    break;
+                }
+                case SPELL_DRUID_STARSURGE:
+                {
+                    // If we are set to fill the solar side or we've just logged in with 0 power (confirmed with sniffs)
+                    if ((!caster->HasAura(SPELL_DRUID_LUNAR_ECLIPSE_MARKER) && caster->HasAura(SPELL_DRUID_SOLAR_ECLIPSE_MARKER))
+                        || caster->GetPower(POWER_ECLIPSE) == 0)
+                    {
+                        energizeAmount = GetSpellInfo()->Effects[effIndex].BasePoints; // 15
+                        caster->CastCustomSpell(caster,SPELL_DRUID_STARSURGE_ENERGIZE,&energizeAmount,0,0,true);
+
+                        // If the energize was due to 0 power, cast the eclipse marker aura
+                        if (!caster->HasAura(SPELL_DRUID_SOLAR_ECLIPSE_MARKER))
+                            caster->CastSpell(caster,SPELL_DRUID_SOLAR_ECLIPSE_MARKER,true);
+                    }
+                    else if (!caster->HasAura(SPELL_DRUID_SOLAR_ECLIPSE_MARKER) && caster->HasAura(SPELL_DRUID_LUNAR_ECLIPSE_MARKER))
+                    {
+                        energizeAmount = -GetSpellInfo()->Effects[effIndex].BasePoints; // -15
+                        caster->CastCustomSpell(caster,SPELL_DRUID_STARSURGE_ENERGIZE,&energizeAmount,0,0,true);
+                    }
+                    // The energizing effect brought us out of the lunar eclipse, remove the aura
+                    if (caster->HasAura(SPELL_DRUID_LUNAR_ECLIPSE) && caster->GetPower(POWER_ECLIPSE) >= 0)
+                        caster->RemoveAura(SPELL_DRUID_LUNAR_ECLIPSE);
+                    // The energizing effect brought us out of the solar eclipse, remove the aura
+                    else if (caster->HasAura(SPELL_DRUID_SOLAR_ECLIPSE) && caster->GetPower(POWER_ECLIPSE) <= 0)
+                        caster->RemoveAura(SPELL_DRUID_SOLAR_ECLIPSE);
+                    break;
+                }
+            }
+        }
+
+        void Register()
+        {
+            OnEffectHitTarget += SpellEffectFn(spell_dru_eclipse_energize_SpellScript::HandleEnergize, EFFECT_1, SPELL_EFFECT_DUMMY);
+        }
+    };
+
+    SpellScript* GetSpellScript() const
+    {
+        return new spell_dru_eclipse_energize_SpellScript;
+    }
+};
+
 class spell_dru_lifebloom : public SpellScriptLoader
 {
     public:
@@ -181,7 +305,7 @@ class spell_dru_lifebloom : public SpellScriptLoader
                     GetTarget()->CastCustomSpell(GetTarget(), DRUID_LIFEBLOOM_FINAL_HEAL, &healAmount, NULL, NULL, true, NULL, aurEff, GetCasterGUID());
 
                     // restore mana
-                    int32 returnMana = CalculatePctU(caster->GetCreateMana(), GetSpellInfo()->ManaCostPercentage) * stack / 2;
+                    int32 returnMana = CalculatePct(caster->GetCreateMana(), GetSpellInfo()->ManaCostPercentage) * stack / 2;
                     caster->CastCustomSpell(caster, DRUID_LIFEBLOOM_ENERGIZE, &returnMana, NULL, NULL, true, NULL, aurEff, GetCasterGUID());
                     return;
                 }
@@ -204,7 +328,7 @@ class spell_dru_lifebloom : public SpellScriptLoader
                             target->CastCustomSpell(target, DRUID_LIFEBLOOM_FINAL_HEAL, &healAmount, NULL, NULL, true, NULL, NULL, GetCasterGUID());
 
                             // restore mana
-                            int32 returnMana = CalculatePctU(caster->GetCreateMana(), GetSpellInfo()->ManaCostPercentage) * dispelInfo->GetRemovedCharges() / 2;
+                            int32 returnMana = CalculatePct(caster->GetCreateMana(), GetSpellInfo()->ManaCostPercentage) * dispelInfo->GetRemovedCharges() / 2;
                             caster->CastCustomSpell(caster, DRUID_LIFEBLOOM_ENERGIZE, &returnMana, NULL, NULL, true, NULL, NULL, GetCasterGUID());
                             return;
                         }
@@ -255,7 +379,7 @@ class spell_dru_moonkin_form_passive : public SpellScriptLoader
             {
                 // reduces all damage taken while Stunned in Moonkin Form
                 if (GetTarget()->GetUInt32Value(UNIT_FIELD_FLAGS) & (UNIT_FLAG_STUNNED) && GetTarget()->HasAuraWithMechanic(1<<MECHANIC_STUN))
-                    absorbAmount = CalculatePctN(dmgInfo.GetDamage(), absorbPct);
+                    absorbAmount = CalculatePct(dmgInfo.GetDamage(), absorbPct);
             }
 
             void Register()
@@ -327,7 +451,7 @@ class spell_dru_primal_tenacity : public SpellScriptLoader
             {
                 // reduces all damage taken while Stunned in Cat Form
                 if (GetTarget()->GetShapeshiftForm() == FORM_CAT && GetTarget()->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_STUNNED) && GetTarget()->HasAuraWithMechanic(1<<MECHANIC_STUN))
-                    absorbAmount = CalculatePctN(dmgInfo.GetDamage(), absorbPct);
+                    absorbAmount = CalculatePct(dmgInfo.GetDamage(), absorbPct);
             }
 
             void Register()
@@ -369,7 +493,7 @@ class spell_dru_savage_defense : public SpellScriptLoader
 
             void Absorb(AuraEffect* aurEff, DamageInfo & /*dmgInfo*/, uint32 & absorbAmount)
             {
-                absorbAmount = uint32(CalculatePctN(GetTarget()->GetTotalAttackPowerValue(BASE_ATTACK), absorbPct));
+                absorbAmount = uint32(CalculatePct(GetTarget()->GetTotalAttackPowerValue(BASE_ATTACK), absorbPct));
                 aurEff->SetAmount(0);
             }
 
@@ -604,7 +728,7 @@ class spell_dru_swift_flight_passive : public SpellScriptLoader
             void CalculateAmount(AuraEffect const* /*aurEff*/, int32 & amount, bool & /*canBeRecalculated*/)
             {
                 if (Player* caster = GetCaster()->ToPlayer())
-                    if (caster->Has310Flyer(false))
+                    if (caster->GetSkillValue(SKILL_RIDING) >= 375)
                         amount = 310;
             }
 
@@ -718,4 +842,5 @@ void AddSC_druid_spell_scripts()
     new spell_dru_swift_flight_passive();
     new spell_dru_tiger_s_fury();
     new spell_dru_t10_restoration_4p_bonus();
+    new spell_dru_eclipse_energize();
 }

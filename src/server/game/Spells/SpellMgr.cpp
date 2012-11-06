@@ -308,7 +308,7 @@ int32 GetDiminishingReturnsLimitDuration(DiminishingGroup group, SpellInfo const
             break;
     }
 
-    return 10 * IN_MILLISECONDS;
+    return 8 * IN_MILLISECONDS;
 }
 
 bool IsDiminishingReturnsGroupDurationLimited(DiminishingGroup group)
@@ -645,7 +645,7 @@ SpellSpellGroupMapBounds SpellMgr::GetSpellSpellGroupMapBounds(uint32 spell_id) 
     return SpellSpellGroupMapBounds(mSpellSpellGroup.lower_bound(spell_id), mSpellSpellGroup.upper_bound(spell_id));
 }
 
-uint32 SpellMgr::IsSpellMemberOfSpellGroup(uint32 spellid, SpellGroup groupid) const
+bool SpellMgr::IsSpellMemberOfSpellGroup(uint32 spellid, SpellGroup groupid) const
 {
     SpellSpellGroupMapBounds spellGroup = GetSpellSpellGroupMapBounds(spellid);
     for (SpellSpellGroupMap::const_iterator itr = spellGroup.first; itr != spellGroup.second; ++itr)
@@ -1061,12 +1061,9 @@ SpellAreaMapBounds SpellMgr::GetSpellAreaMapBounds(uint32 spell_id) const
     return SpellAreaMapBounds(mSpellAreaMap.lower_bound(spell_id), mSpellAreaMap.upper_bound(spell_id));
 }
 
-SpellAreaForQuestMapBounds SpellMgr::GetSpellAreaForQuestMapBounds(uint32 quest_id, bool active) const
+SpellAreaForQuestMapBounds SpellMgr::GetSpellAreaForQuestMapBounds(uint32 quest_id) const
 {
-    if (active)
-        return SpellAreaForQuestMapBounds(mSpellAreaForActiveQuestMap.lower_bound(quest_id), mSpellAreaForActiveQuestMap.upper_bound(quest_id));
-    else
-        return SpellAreaForQuestMapBounds(mSpellAreaForQuestMap.lower_bound(quest_id), mSpellAreaForQuestMap.upper_bound(quest_id));
+    return SpellAreaForQuestMapBounds(mSpellAreaForQuestMap.lower_bound(quest_id), mSpellAreaForQuestMap.upper_bound(quest_id));
 }
 
 SpellAreaForQuestMapBounds SpellMgr::GetSpellAreaForQuestEndMapBounds(uint32 quest_id) const
@@ -1099,11 +1096,11 @@ bool SpellArea::IsFitToRequirements(Player const* player, uint32 newZone, uint32
             return false;
 
     if (questStart)                              // not in expected required quest state
-        if (!player || ((!questStartCanActive || !player->IsActiveQuest(questStart)) && !player->GetQuestRewardStatus(questStart)))
+        if (!player || (((1 << player->GetQuestStatus(questStart)) & questStartStatus) == 0))
             return false;
 
     if (questEnd)                                // not in expected forbidden quest state
-        if (!player || player->GetQuestRewardStatus(questEnd))
+        if (!player || (((1 << player->GetQuestStatus(questEnd)) & questEndStatus) == 0))
             return false;
 
     if (auraSpell)                               // not have expected aura
@@ -2433,12 +2430,11 @@ void SpellMgr::LoadSpellAreas()
 
     mSpellAreaMap.clear();                                  // need for reload case
     mSpellAreaForQuestMap.clear();
-    mSpellAreaForActiveQuestMap.clear();
     mSpellAreaForQuestEndMap.clear();
     mSpellAreaForAuraMap.clear();
 
-    //                                                  0     1         2              3               4           5          6        7       8
-    QueryResult result = WorldDatabase.Query("SELECT spell, area, quest_start, quest_start_active, quest_end, aura_spell, racemask, gender, autocast FROM spell_area");
+    //                                                  0     1         2              3               4                 5          6          7       8         9
+    QueryResult result = WorldDatabase.Query("SELECT spell, area, quest_start, quest_start_status, quest_end_status, quest_end, aura_spell, racemask, gender, autocast FROM spell_area");
 
     if (!result)
     {
@@ -2457,12 +2453,13 @@ void SpellMgr::LoadSpellAreas()
         spellArea.spellId             = spell;
         spellArea.areaId              = fields[1].GetUInt32();
         spellArea.questStart          = fields[2].GetUInt32();
-        spellArea.questStartCanActive = fields[3].GetBool();
-        spellArea.questEnd            = fields[4].GetUInt32();
-        spellArea.auraSpell           = fields[5].GetInt32();
-        spellArea.raceMask            = fields[6].GetUInt32();
-        spellArea.gender              = Gender(fields[7].GetUInt8());
-        spellArea.autocast            = fields[8].GetBool();
+        spellArea.questStartStatus    = fields[3].GetUInt32();
+        spellArea.questEndStatus      = fields[4].GetUInt32();
+        spellArea.questEnd            = fields[5].GetUInt32();
+        spellArea.auraSpell           = fields[6].GetInt32();
+        spellArea.raceMask            = fields[7].GetUInt32();
+        spellArea.gender              = Gender(fields[8].GetUInt8());
+        spellArea.autocast            = fields[9].GetBool();
 
         if (SpellInfo const* spellInfo = GetSpellInfo(spell))
         {
@@ -2494,7 +2491,7 @@ void SpellMgr::LoadSpellAreas()
                     continue;
 
                 // duplicate by requirements
-                ok =false;
+                ok = false;
                 break;
             }
 
@@ -2522,12 +2519,6 @@ void SpellMgr::LoadSpellAreas()
             if (!sObjectMgr->GetQuestTemplate(spellArea.questEnd))
             {
                 sLog->outError(LOG_FILTER_SQL, "Spell %u listed in `spell_area` have wrong end quest (%u) requirement", spell, spellArea.questEnd);
-                continue;
-            }
-
-            if (spellArea.questEnd == spellArea.questStart && !spellArea.questStartCanActive)
-            {
-                sLog->outError(LOG_FILTER_SQL, "Spell %u listed in `spell_area` have quest (%u) requirement for start and end in same time", spell, spellArea.questEnd);
                 continue;
             }
         }
@@ -2605,12 +2596,7 @@ void SpellMgr::LoadSpellAreas()
 
         // for search at quest start/reward
         if (spellArea.questStart)
-        {
-            if (spellArea.questStartCanActive)
-                mSpellAreaForActiveQuestMap.insert(SpellAreaForQuestMap::value_type(spellArea.questStart, sa));
-            else
-                mSpellAreaForQuestMap.insert(SpellAreaForQuestMap::value_type(spellArea.questStart, sa));
-        }
+            mSpellAreaForQuestMap.insert(SpellAreaForQuestMap::value_type(spellArea.questStart, sa));
 
         // for search at quest start/reward
         if (spellArea.questEnd)
@@ -2626,6 +2612,19 @@ void SpellMgr::LoadSpellAreas()
     sLog->outInfo(LOG_FILTER_SERVER_LOADING, ">> Loaded %u spell area requirements in %u ms", count, GetMSTimeDiffToNow(oldMSTime));
 }
 
+// Temporary structure to hold spell effect entries for faster loading
+struct SpellEffectArray
+{
+    SpellEffectArray()
+    {
+        effects[0] = NULL;
+        effects[1] = NULL;
+        effects[2] = NULL;
+    }
+
+    SpellEffectEntry const* effects[MAX_SPELL_EFFECTS];
+};
+
 void SpellMgr::LoadSpellInfoStore()
 {
     uint32 oldMSTime = getMSTime();
@@ -2633,13 +2632,22 @@ void SpellMgr::LoadSpellInfoStore()
     UnloadSpellInfoStore();
     mSpellInfoMap.resize(sSpellStore.GetNumRows(), NULL);
 
-    for (uint32 i = 0; i < sSpellStore.GetNumRows(); ++i)
+    std::map<uint32, SpellEffectArray> effectsBySpell;
+
+    for (uint32 i = 0; i < sSpellEffectStore.GetNumRows(); ++i)
     {
-        if (SpellEntry const* spellEntry = sSpellStore.LookupEntry(i))
-            mSpellInfoMap[i] = new SpellInfo(spellEntry);
+        SpellEffectEntry const* effect = sSpellEffectStore.LookupEntry(i);
+        if (!effect)
+            continue;
+
+        effectsBySpell[effect->EffectSpellId].effects[effect->EffectIndex] = effect;
     }
 
-    sLog->outInfo(LOG_FILTER_SERVER_LOADING, ">> Loaded spell custom attributes in %u ms", GetMSTimeDiffToNow(oldMSTime));
+    for (uint32 i = 0; i < sSpellStore.GetNumRows(); ++i)
+        if (SpellEntry const* spellEntry = sSpellStore.LookupEntry(i))
+            mSpellInfoMap[i] = new SpellInfo(spellEntry, effectsBySpell[i].effects);
+
+    sLog->outInfo(LOG_FILTER_SERVER_LOADING, ">> Loaded spell info store in %u ms", GetMSTimeDiffToNow(oldMSTime));
 }
 
 void SpellMgr::UnloadSpellInfoStore()
@@ -2962,7 +2970,7 @@ void SpellMgr::LoadDbcDataCorrections()
 {
     uint32 oldMSTime = getMSTime();
 
-    SpellEntry* spellInfo = NULL;
+    /*SpellEntry* spellInfo = NULL;
     for (uint32 i = 0; i < sSpellStore.GetNumRows(); ++i)
     {
         spellInfo = (SpellEntry*)sSpellStore.LookupEntry(i);
@@ -3265,6 +3273,12 @@ void SpellMgr::LoadDbcDataCorrections()
             case 53246: // Marked for Death (Rank 5)
                 spellInfo->EffectSpellClassMask[0] = flag96(0x00067801, 0x10820001, 0x00000801);
                 break;
+            case 5176:  // Wrath
+            case 2912:  // Starfire
+            case 78674: // Starsurge
+                spellInfo->Effects[1].Effect = SPELL_EFFECT_DUMMY;
+                spellInfo->Effects[1].TargetA = TARGET_UNIT_CASTER;
+                break;
             case 70728: // Exploit Weakness (needs target selection script)
             case 70840: // Devious Minds (needs target selection script)
                 spellInfo->EffectImplicitTargetA[0] = TARGET_UNIT_CASTER;
@@ -3402,7 +3416,7 @@ void SpellMgr::LoadDbcDataCorrections()
                 break;
             case 69055: // Saber Lash (Lord Marrowgar)
             case 70814: // Saber Lash (Lord Marrowgar)
-                spellInfo->EffectRadiusIndex[0] = EFFECT_RADIUS_5_YARDS;    // 5yd
+                spellInfo->EffectRadiusIndex[0] = EFFECT_RADIUS_5_YARDS; // 5yd
                 break;
             case 69075: // Bone Storm (Lord Marrowgar)
             case 70834: // Bone Storm (Lord Marrowgar)
@@ -3412,7 +3426,7 @@ void SpellMgr::LoadDbcDataCorrections()
             case 71160: // Plague Stench (Stinky)
             case 71161: // Plague Stench (Stinky)
             case 71123: // Decimate (Stinky & Precious)
-                spellInfo->EffectRadiusIndex[0] = EFFECT_RADIUS_100_YARDS;   // 100yd
+                spellInfo->EffectRadiusIndex[0] = EFFECT_RADIUS_100_YARDS; // 100yd
                 break;
             case 72378: // Blood Nova (Deathbringer Saurfang)
             case 73058: // Blood Nova (Deathbringer Saurfang)
@@ -3430,7 +3444,7 @@ void SpellMgr::LoadDbcDataCorrections()
                 spellInfo->Effect[2] = 0;
                 break;
             case 70460: // Coldflame Jets (Traps after Saurfang)
-                spellInfo->DurationIndex = 1;   // 10 seconds
+                spellInfo->DurationIndex = 1; // 10 seconds
                 break;
             case 71412: // Green Ooze Summon (Professor Putricide)
             case 71415: // Orange Ooze Summon (Professor Putricide)
@@ -3453,7 +3467,7 @@ void SpellMgr::LoadDbcDataCorrections()
             case 72464: // Mutated Plague (Professor Putricide)
             case 72506: // Mutated Plague (Professor Putricide)
             case 72507: // Mutated Plague (Professor Putricide)
-                spellInfo->EffectRadiusIndex[0] = EFFECT_RADIUS_50000_YARDS;   // 50000yd
+                spellInfo->EffectRadiusIndex[0] = EFFECT_RADIUS_50000_YARDS; // 50000yd
                 break;
             case 70911: // Unbound Plague (Professor Putricide) (needs target selection script)
             case 72854: // Unbound Plague (Professor Putricide) (needs target selection script)
@@ -3464,7 +3478,7 @@ void SpellMgr::LoadDbcDataCorrections()
             case 71518: // Unholy Infusion Quest Credit (Professor Putricide)
             case 72934: // Blood Infusion Quest Credit (Blood-Queen Lana'thel)
             case 72289: // Frost Infusion Quest Credit (Sindragosa)
-                spellInfo->EffectRadiusIndex[0] = EFFECT_RADIUS_50000_YARDS;   // another missing radius
+                spellInfo->EffectRadiusIndex[0] = EFFECT_RADIUS_50000_YARDS; // another missing radius
                 break;
             case 71708: // Empowered Flare (Blood Prince Council)
             case 72785: // Empowered Flare (Blood Prince Council)
@@ -3485,6 +3499,10 @@ void SpellMgr::LoadDbcDataCorrections()
                 break;
             case 71085: // Mana Void (periodic aura)
                 spellInfo->DurationIndex = 9; // 30 seconds (missing)
+                break;
+            case 72015: // Frostbolt Volley (only heroic)
+            case 72016: // Frostbolt Volley (only heroic)
+                spellInfo->EffectRadiusIndex[2] = EFFECT_RADIUS_40_YARDS;
                 break;
             case 70936: // Summon Suppressor (needs target selection script)
                 spellInfo->EffectImplicitTargetA[0] = TARGET_UNIT_TARGET_ANY;
@@ -3513,62 +3531,62 @@ void SpellMgr::LoadDbcDataCorrections()
             case 73708: // Defile
             case 73709: // Defile
             case 73710: // Defile
-                spellInfo->EffectRadiusIndex[0] = EFFECT_RADIUS_200_YARDS;   // 200yd
-                spellInfo->EffectRadiusIndex[1] = EFFECT_RADIUS_200_YARDS;   // 200yd
+                spellInfo->EffectRadiusIndex[0] = EFFECT_RADIUS_200_YARDS; // 200yd
+                spellInfo->EffectRadiusIndex[1] = EFFECT_RADIUS_200_YARDS; // 200yd
                 break;
             case 69030: // Val'kyr Target Search
-                spellInfo->EffectRadiusIndex[0] = EFFECT_RADIUS_200_YARDS;   // 200yd
-                spellInfo->EffectRadiusIndex[1] = EFFECT_RADIUS_200_YARDS;   // 200yd
+                spellInfo->EffectRadiusIndex[0] = EFFECT_RADIUS_200_YARDS; // 200yd
+                spellInfo->EffectRadiusIndex[1] = EFFECT_RADIUS_200_YARDS; // 200yd
                 break;
             case 69198: // Raging Spirit Visual
-                spellInfo->rangeIndex = 13;             // 50000yd
+                spellInfo->rangeIndex = 13; // 50000yd
                 break;
             case 73654: // Harvest Souls
             case 74295: // Harvest Souls
             case 74296: // Harvest Souls
             case 74297: // Harvest Souls
-                spellInfo->EffectRadiusIndex[0] = EFFECT_RADIUS_50000_YARDS;   // 50000yd
-                spellInfo->EffectRadiusIndex[1] = EFFECT_RADIUS_50000_YARDS;   // 50000yd
-                spellInfo->EffectRadiusIndex[2] = EFFECT_RADIUS_50000_YARDS;   // 50000yd
+                spellInfo->EffectRadiusIndex[0] = EFFECT_RADIUS_50000_YARDS; // 50000yd
+                spellInfo->EffectRadiusIndex[1] = EFFECT_RADIUS_50000_YARDS; // 50000yd
+                spellInfo->EffectRadiusIndex[2] = EFFECT_RADIUS_50000_YARDS; // 50000yd
                 break;
             case 73655: // Harvest Soul
                 spellInfo->AttributesEx3 |= SPELL_ATTR3_NO_DONE_BONUS;
                 break;
             case 73540: // Summon Shadow Trap
-                spellInfo->DurationIndex = 23;          // 90 seconds
+                spellInfo->DurationIndex = 23; // 90 seconds
                 break;
             case 73530: // Shadow Trap (visual)
-                spellInfo->DurationIndex = 28;          // 5 seconds
+                spellInfo->DurationIndex = 28; // 5 seconds
                 break;
             case 73529: // Shadow Trap
-                spellInfo->EffectRadiusIndex[1] = EFFECT_RADIUS_10_YARDS;   // 10yd
+                spellInfo->EffectRadiusIndex[1] = EFFECT_RADIUS_10_YARDS; // 10yd
                 break;
             case 74282: // Shadow Trap (searcher)
-                spellInfo->EffectRadiusIndex[0] = EFFECT_RADIUS_3_YARDS;   // 3yd
+                spellInfo->EffectRadiusIndex[0] = EFFECT_RADIUS_3_YARDS; // 3yd
                 break;
             case 72595: // Restore Soul
             case 73650: // Restore Soul
-                spellInfo->EffectRadiusIndex[0] = EFFECT_RADIUS_200_YARDS;   // 200yd
+                spellInfo->EffectRadiusIndex[0] = EFFECT_RADIUS_200_YARDS; // 200yd
                 break;
             case 74086: // Destroy Soul
-                spellInfo->EffectRadiusIndex[0] = EFFECT_RADIUS_200_YARDS;   // 200yd
+                spellInfo->EffectRadiusIndex[0] = EFFECT_RADIUS_200_YARDS; // 200yd
                 break;
             case 74302: // Summon Spirit Bomb
             case 74342: // Summon Spirit Bomb
-                spellInfo->EffectRadiusIndex[0] = EFFECT_RADIUS_200_YARDS;   // 200yd
+                spellInfo->EffectRadiusIndex[0] = EFFECT_RADIUS_200_YARDS; // 200yd
                 spellInfo->MaxAffectedTargets = 1;
                 break;
             case 74341: // Summon Spirit Bomb
             case 74343: // Summon Spirit Bomb
-                spellInfo->EffectRadiusIndex[0] = EFFECT_RADIUS_200_YARDS;   // 200yd
+                spellInfo->EffectRadiusIndex[0] = EFFECT_RADIUS_200_YARDS; // 200yd
                 spellInfo->MaxAffectedTargets = 3;
                 break;
             case 73579: // Summon Spirit Bomb
-                spellInfo->EffectRadiusIndex[0] = EFFECT_RADIUS_25_YARDS;   // 25yd
+                spellInfo->EffectRadiusIndex[0] = EFFECT_RADIUS_25_YARDS; // 25yd
                 break;
             case 72350: // Fury of Frostmourne
-                spellInfo->EffectRadiusIndex[0] = EFFECT_RADIUS_50000_YARDS;   // 50000yd
-                spellInfo->EffectRadiusIndex[1] = EFFECT_RADIUS_50000_YARDS;   // 50000yd
+                spellInfo->EffectRadiusIndex[0] = EFFECT_RADIUS_50000_YARDS; // 50000yd
+                spellInfo->EffectRadiusIndex[1] = EFFECT_RADIUS_50000_YARDS; // 50000yd
                 break;
             case 75127: // Kill Frostmourne Players
             case 72351: // Fury of Frostmourne
@@ -3576,19 +3594,39 @@ void SpellMgr::LoadDbcDataCorrections()
             case 72429: // Mass Resurrection
             case 73159: // Play Movie
             case 73582: // Trigger Vile Spirit (Inside, Heroic)
-                spellInfo->EffectRadiusIndex[0] = EFFECT_RADIUS_50000_YARDS;   // 50000yd
+                spellInfo->EffectRadiusIndex[0] = EFFECT_RADIUS_50000_YARDS; // 50000yd
                 break;
             case 72376: // Raise Dead
                 spellInfo->MaxAffectedTargets = 3;
-                spellInfo->EffectRadiusIndex[0] = EFFECT_RADIUS_50000_YARDS;   // 50000yd
+                spellInfo->EffectRadiusIndex[0] = EFFECT_RADIUS_50000_YARDS; // 50000yd
                 break;
             case 71809: // Jump
-                spellInfo->rangeIndex = 3;              // 20yd
-                spellInfo->EffectRadiusIndex[0] = EFFECT_RADIUS_25_YARDS;   // 25yd
+                spellInfo->rangeIndex = 3; // 20yd
+                spellInfo->EffectRadiusIndex[0] = EFFECT_RADIUS_25_YARDS; // 25yd
                 break;
             case 72405: // Broken Frostmourne
-                spellInfo->EffectRadiusIndex[1] = EFFECT_RADIUS_200_YARDS;   // 200yd
+                spellInfo->EffectRadiusIndex[1] = EFFECT_RADIUS_200_YARDS; // 200yd
                 break;
+            // ENDOF ICECROWN CITADEL SPELLS
+            //
+            // RUBY SANCTUM SPELLS
+            //
+            case 74769: // Twilight Cutter
+            case 77844: // Twilight Cutter
+            case 77845: // Twilight Cutter
+            case 77846: // Twilight Cutter
+                spellInfo->EffectRadiusIndex[0] = EFFECT_RADIUS_100_YARDS; // 100yd
+                break;
+            case 75509: // Twilight Mending
+                spellInfo->AttributesEx6 |= SPELL_ATTR6_CAN_TARGET_INVISIBLE;
+                spellInfo->AttributesEx2 |= SPELL_ATTR2_CAN_TARGET_NOT_IN_LOS;
+                break;
+            case 75888: // Awaken Flames
+            case 75889: // Awaken Flames
+                spellInfo->AttributesEx |= SPELL_ATTR1_CANT_TARGET_SELF;
+                break;
+            // ENDOF RUBY SANCTUM SPELLS
+            //
             case 40055: // Introspection
             case 40165: // Introspection
             case 40166: // Introspection
@@ -3598,6 +3636,13 @@ void SpellMgr::LoadDbcDataCorrections()
             case 2378: // Minor Fortitude
                 spellInfo->manaCost = 0;
                 spellInfo->manaPerSecond = 0;
+                break;
+            // OCULUS SPELLS
+            // The spells below are here, because their effect 1 is giving warning, because the triggered spell is not found in dbc and is missing from encounter sniff.
+            case 49462: // Call Ruby Drake
+            case 49461: // Call Amber Drake
+            case 49345: // Call Emerald Drake
+                spellInfo->Effect[1] = 0;
                 break;
             default:
                 break;
@@ -3622,6 +3667,6 @@ void SpellMgr::LoadDbcDataCorrections()
     properties->Type = SUMMON_TYPE_TOTEM;
     properties = const_cast<SummonPropertiesEntry*>(sSummonPropertiesStore.LookupEntry(647)); // 52893
     properties->Type = SUMMON_TYPE_TOTEM;
-
-    sLog->outInfo(LOG_FILTER_SERVER_LOADING, ">> Loading spell dbc data corrections  in %u ms", GetMSTimeDiffToNow(oldMSTime));
+    */
+    sLog->outInfo(LOG_FILTER_SERVER_LOADING, ">> Loaded spell dbc data corrections in %u ms", GetMSTimeDiffToNow(oldMSTime));
 }

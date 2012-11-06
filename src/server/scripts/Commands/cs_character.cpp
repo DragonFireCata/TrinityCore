@@ -224,7 +224,7 @@ public:
         stmt = CharacterDatabase.GetPreparedStatement(CHAR_SEL_CHARACTER_NAME_DATA);
         stmt->setUInt32(0, delInfo.lowGuid);
         if (PreparedQueryResult result = CharacterDatabase.Query(stmt))
-            sWorld->AddCharacterNameData(delInfo.lowGuid, delInfo.name, (*result)[2].GetUInt8(), (*result)[0].GetUInt8(), (*result)[1].GetUInt8());
+            sWorld->AddCharacterNameData(delInfo.lowGuid, delInfo.name, (*result)[2].GetUInt8(), (*result)[0].GetUInt8(), (*result)[1].GetUInt8(), (*result)[3].GetUInt8());
     }
 
     static void HandleCharacterLevel(Player* player, uint64 playerGuid, uint32 oldLevel, uint32 newLevel, ChatHandler* handler)
@@ -265,7 +265,7 @@ public:
             return false;
 
         LocaleConstant loc = handler->GetSessionDbcLocale();
-        char const* targetName = target->GetName();
+        char const* targetName = target->GetName().c_str();
         char const* knownStr = handler->GetTrinityString(LANG_KNOWN);
 
         // Search in CharTitles.dbc
@@ -275,7 +275,7 @@ public:
 
             if (titleInfo && target->HasTitle(titleInfo))
             {
-                std::string name = titleInfo->name[loc];
+                std::string name = titleInfo->name;
                 if (name.empty())
                     continue;
 
@@ -471,7 +471,7 @@ public:
         {
             FactionState const& faction = itr->second;
             FactionEntry const* factionEntry = sFactionStore.LookupEntry(faction.ID);
-            char const* factionName = factionEntry ? factionEntry->name[loc] : "#Not found#";
+            char const* factionName = factionEntry ? factionEntry->name : "#Not found#";
             ReputationRank rank = target->GetReputationMgr().GetRank(factionEntry);
             std::string rankName = handler->GetTrinityString(ReputationRankStrIndex[rank]);
             std::ostringstream ss;
@@ -681,7 +681,7 @@ public:
         uint64 characterGuid;
         uint32 accountId;
 
-        Player* player = sObjectAccessor->FindPlayerByName(characterName.c_str());
+        Player* player = sObjectAccessor->FindPlayerByName(characterName);
         if (player)
         {
             characterGuid = player->GetGUID();

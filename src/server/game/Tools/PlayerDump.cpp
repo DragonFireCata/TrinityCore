@@ -23,7 +23,7 @@
 #include "ObjectMgr.h"
 #include "AccountMgr.h"
 
-#define DUMP_TABLE_COUNT 27
+#define DUMP_TABLE_COUNT 29
 struct DumpTable
 {
     char const* name;
@@ -38,6 +38,8 @@ static DumpTable dumpTables[DUMP_TABLE_COUNT] =
     { "character_achievement_progress",   DTT_CHAR_TABLE },
     { "character_action",                 DTT_CHAR_TABLE },
     { "character_aura",                   DTT_CHAR_TABLE },
+    { "character_currency",               DTT_CHAR_TABLE },
+    { "character_cuf_profiles",           DTT_CHAR_TABLE },
     { "character_declinedname",           DTT_CHAR_TABLE },
     { "character_equipmentsets",          DTT_EQSET_TABLE},
     { "character_gifts",                  DTT_ITEM_GIFT  },
@@ -117,7 +119,7 @@ std::string gettablename(std::string &str)
     return str.substr(s, e-s);
 }
 
-bool changenth(std::string &str, int n, const char *with, bool insert = false, bool nonzero = false)
+bool changenth(std::string &str, int n, char const* with, bool insert = false, bool nonzero = false)
 {
     std::string::size_type s, e;
     if (!findnth(str, n, s, e))
@@ -142,7 +144,7 @@ std::string getnth(std::string &str, int n)
     return str.substr(s, e-s);
 }
 
-bool changetoknth(std::string &str, int n, const char *with, bool insert = false, bool nonzero = false)
+bool changetoknth(std::string &str, int n, char const* with, bool insert = false, bool nonzero = false)
 {
     std::string::size_type s = 0, e = 0;
     if (!findtoknth(str, n, s, e))
@@ -198,7 +200,7 @@ std::string CreateDumpString(char const* tableName, QueryResult result)
 {
     if (!tableName || !result) return "";
     std::ostringstream ss;
-    ss << "INSERT INTO "<< _TABLE_SIM_ << tableName << _TABLE_SIM_ << " VALUES (";
+    ss << "INSERT INTO " << _TABLE_SIM_ << tableName << _TABLE_SIM_ << " VALUES (";
     Field* fields = result->Fetch();
     for (uint32 i = 0; i < result->GetFieldCount(); ++i)
     {
@@ -319,10 +321,13 @@ bool PlayerDumpWriter::DumpTable(std::string& dump, uint32 guid, char const*tabl
                     break;
                 case DTT_CHARACTER:
                 {
-                    if (result->GetFieldCount() <= 68)          // avoid crashes on next check
+                    if (result->GetFieldCount() <= 64)          // avoid crashes on next check
+                    {
                         sLog->outFatal(LOG_FILTER_GENERAL, "PlayerDumpWriter::DumpTable - Trying to access non-existing or wrong positioned field (`deleteInfos_Account`) in `characters` table.");
+                        return false;
+                    }
 
-                    if (result->Fetch()[68].GetUInt32())        // characters.deleteInfos_Account - if filled error
+                    if (result->Fetch()[64].GetUInt32())        // characters.deleteInfos_Account - if filled error
                         return false;
                     break;
                 }
@@ -395,7 +400,7 @@ void fixNULLfields(std::string &line)
     }
 }
 
-DumpReturn PlayerDumpReader::LoadDump(const std::string& file, uint32 account, std::string name, uint32 guid)
+DumpReturn PlayerDumpReader::LoadDump(std::string const& file, uint32 account, std::string name, uint32 guid)
 {
     uint32 charcount = AccountMgr::GetCharactersCount(account);
     if (charcount >= 10)
@@ -457,6 +462,7 @@ DumpReturn PlayerDumpReader::LoadDump(const std::string& file, uint32 account, s
     uint8 gender = GENDER_NONE;
     uint8 race = RACE_NONE;
     uint8 playerClass = 0;
+    uint8 level = 1;
 
     SQLTransaction trans = CharacterDatabase.BeginTransaction();
     while (!feof(fin))
@@ -531,6 +537,7 @@ DumpReturn PlayerDumpReader::LoadDump(const std::string& file, uint32 account, s
                 race = uint8(atol(getnth(line, 4).c_str()));
                 playerClass = uint8(atol(getnth(line, 5).c_str()));
                 gender = uint8(atol(getnth(line, 6).c_str()));
+                level = uint8(atol(getnth(line, 7).c_str()));
                 if (name == "")
                 {
                     // check if the original name already exists
@@ -541,18 +548,18 @@ DumpReturn PlayerDumpReader::LoadDump(const std::string& file, uint32 account, s
                     PreparedQueryResult result = CharacterDatabase.Query(stmt);
 
                     if (result)
-                        if (!changenth(line, 37, "1"))       // characters.at_login set to "rename on login"
+                        if (!changenth(line, 38, "1"))       // characters.at_login set to "rename on login"
                             ROLLBACK(DUMP_FILE_BROKEN);
                 }
                 else if (!changenth(line, 3, name.c_str())) // characters.name
                     ROLLBACK(DUMP_FILE_BROKEN);
 
                 const char null[5] = "NULL";
-                if (!changenth(line, 69, null))             // characters.deleteInfos_Account
+                if (!changenth(line, 63, null))             // characters.deleteInfos_Account
                     ROLLBACK(DUMP_FILE_BROKEN);
-                if (!changenth(line, 70, null))             // characters.deleteInfos_Name
+                if (!changenth(line, 64, null))             // characters.deleteInfos_Name
                     ROLLBACK(DUMP_FILE_BROKEN);
-                if (!changenth(line, 71, null))             // characters.deleteDate
+                if (!changenth(line, 65, null))             // characters.deleteDate
                     ROLLBACK(DUMP_FILE_BROKEN);
                 break;
             }
@@ -674,7 +681,7 @@ DumpReturn PlayerDumpReader::LoadDump(const std::string& file, uint32 account, s
     CharacterDatabase.CommitTransaction(trans);
 
     // in case of name conflict player has to rename at login anyway
-    sWorld->AddCharacterNameData(guid, name, gender, race, playerClass);
+    sWorld->AddCharacterNameData(guid, name, gender, race, playerClass, level);
 
     sObjectMgr->_hiItemGuid += items.size();
     sObjectMgr->_mailId     += mails.size();

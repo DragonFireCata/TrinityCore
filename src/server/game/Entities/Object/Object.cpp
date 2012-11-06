@@ -47,6 +47,7 @@
 #include "OutdoorPvPMgr.h"
 #include "MovementPacketBuilder.h"
 #include "DynamicTree.h"
+#include "Unit.h"
 #include "Group.h"
 #include "Battlefield.h"
 #include "BattlefieldMgr.h"
@@ -92,7 +93,8 @@ WorldObject::~WorldObject()
     {
         if (GetTypeId() == TYPEID_CORPSE)
         {
-            sLog->outFatal(LOG_FILTER_GENERAL, "Object::~Object Corpse guid="UI64FMTD", type=%d, entry=%u deleted but still in map!!", GetGUID(), ((Corpse*)this)->GetType(), GetEntry());
+            sLog->outFatal(LOG_FILTER_GENERAL, "Object::~Object Corpse guid="UI64FMTD", type=%d, entry=%u deleted but still in map!!",
+                GetGUID(), ((Corpse*)this)->GetType(), GetEntry());
             ASSERT(false);
         }
         ResetMap();
@@ -139,21 +141,8 @@ void Object::_Create(uint32 guidlow, uint32 entry, HighGuid guidhigh)
 
     uint64 guid = MAKE_NEW_GUID(guidlow, entry, guidhigh);
     SetUInt64Value(OBJECT_FIELD_GUID, guid);
-    uint32 type = 0;
-    switch (m_objectType)
-    {
-        //case TYPEID_ITEM:       type = 3; break;
-        //case TYPEID_CONTAINER:  type = 7; break;   //+4
-        //case TYPEID_UNIT:       type = 9; break;   //+2
-        //case TYPEID_PLAYER:     type = 25; break;  //+16
-        //case TYPEID_GAMEOBJECT: type = 33; break;  //+8
-        case TYPEID_DYNAMICOBJECT: type = 65; break;  //+32
-        //case TYPEID_CORPSE:     type = 129; break;  //+64
-        default: type = m_objectType; break;
-    }
-    SetUInt32Value(OBJECT_FIELD_TYPE, type);
-    //SetUInt32Value(OBJECT_FIELD_TYPE, m_objectType);
-    m_PackGUID.wpos(0);
+    SetUInt16Value(OBJECT_FIELD_TYPE, 0, m_objectType);
+    m_PackGUID.clear();
     m_PackGUID.appendPackGUID(GetGUID());
 }
 
@@ -189,40 +178,42 @@ void Object::RemoveFromWorld()
     ClearUpdateMask(true);
 }
 
-void Object::BuildMovementUpdateBlock(UpdateData* data, uint32 flags) const
-{
-    ByteBuffer buf(500);
-
-    buf << uint8(UPDATETYPE_MOVEMENT);
-    buf.append(GetPackGUID());
-
-    _BuildMovementUpdate(&buf, flags);
-
-    data->AddUpdateBlock(buf);
-}
-
 void Object::BuildCreateUpdateBlockForPlayer(UpdateData* data, Player* target) const
 {
     if (!target)
         return;
 
-    uint8  updatetype = UPDATETYPE_CREATE_OBJECT;
+    uint8  updateType = UPDATETYPE_CREATE_OBJECT;
     uint16 flags      = m_updateFlag;
+
+    uint32 valCount = m_valuesCount;
 
     /** lower flag1 **/
     if (target == this)                                      // building packet for yourself
         flags |= UPDATEFLAG_SELF;
+    else if (GetTypeId() == TYPEID_PLAYER)
+        valCount = PLAYER_END_NOT_SELF;
+
+    switch (GetGUIDHigh())
+    {
+        case HIGHGUID_PLAYER:
+        case HIGHGUID_PET:
+        case HIGHGUID_CORPSE:
+        case HIGHGUID_DYNAMICOBJECT:
+            updateType = UPDATETYPE_CREATE_OBJECT2;
+            break;
+        case HIGHGUID_UNIT:
+            if (ToUnit()->ToTempSummon() && IS_PLAYER_GUID(ToUnit()->ToTempSummon()->GetSummonerGUID()))
+                updateType = UPDATETYPE_CREATE_OBJECT2;
+            break;
+        case HIGHGUID_GAMEOBJECT:
+            if (IS_PLAYER_GUID(ToGameObject()->GetOwnerGUID()))
+                updateType = UPDATETYPE_CREATE_OBJECT2;
+            break;
+    }
 
     if (flags & UPDATEFLAG_STATIONARY_POSITION)
     {
-        // UPDATETYPE_CREATE_OBJECT2 dynamic objects, corpses...
-        if (isType(TYPEMASK_DYNAMICOBJECT) || isType(TYPEMASK_CORPSE) || isType(TYPEMASK_PLAYER))
-            updatetype = UPDATETYPE_CREATE_OBJECT2;
-
-        // UPDATETYPE_CREATE_OBJECT2 for pets...
-        if (target->GetPetGUID() == GetGUID())
-            updatetype = UPDATETYPE_CREATE_OBJECT2;
-
         // UPDATETYPE_CREATE_OBJECT2 for some gameobject types...
         if (isType(TYPEMASK_GAMEOBJECT))
         {
@@ -232,7 +223,7 @@ void Object::BuildCreateUpdateBlockForPlayer(UpdateData* data, Player* target) c
                 case GAMEOBJECT_TYPE_DUEL_ARBITER:
                 case GAMEOBJECT_TYPE_FLAGSTAND:
                 case GAMEOBJECT_TYPE_FLAGDROP:
-                    updatetype = UPDATETYPE_CREATE_OBJECT2;
+                    updateType = UPDATETYPE_CREATE_OBJECT2;
                     break;
                 case GAMEOBJECT_TYPE_TRANSPORT:
                     flags |= UPDATEFLAG_TRANSPORT;
@@ -241,34 +232,29 @@ void Object::BuildCreateUpdateBlockForPlayer(UpdateData* data, Player* target) c
                     break;
             }
         }
-
-        if (isType(TYPEMASK_UNIT))
-        {
-            if (((Unit*)this)->getVictim())
-                flags |= UPDATEFLAG_HAS_TARGET;
-        }
     }
 
-    //sLog->outDebug("BuildCreateUpdate: update-type: %u, object-type: %u got flags: %X, flags2: %X", updatetype, m_objectTypeId, flags, flags2);
+    if (ToUnit() && ToUnit()->getVictim())
+        flags |= UPDATEFLAG_HAS_TARGET;
 
     ByteBuffer buf(500);
-    buf << (uint8)updatetype;
+    buf << uint8(updateType);
     buf.append(GetPackGUID());
-    buf << (uint8)m_objectTypeId;
+    buf << uint8(m_objectTypeId);
 
     _BuildMovementUpdate(&buf, flags);
 
     UpdateMask updateMask;
-    updateMask.SetCount(m_valuesCount);
+    updateMask.SetCount(valCount);
     _SetCreateBits(&updateMask, target);
-    _BuildValuesUpdate(updatetype, &buf, &updateMask, target);
+    _BuildValuesUpdate(updateType, &buf, &updateMask, target);
     data->AddUpdateBlock(buf);
 }
 
 void Object::SendUpdateToPlayer(Player* player)
 {
     // send create update to player
-    UpdateData upd;
+    UpdateData upd(player->GetMapId());
     WorldPacket packet;
 
     BuildCreateUpdateBlockForPlayer(&upd, player);
@@ -280,11 +266,15 @@ void Object::BuildValuesUpdateBlockForPlayer(UpdateData* data, Player* target) c
 {
     ByteBuffer buf(500);
 
-    buf << (uint8) UPDATETYPE_VALUES;
+    buf << uint8(UPDATETYPE_VALUES);
     buf.append(GetPackGUID());
 
     UpdateMask updateMask;
-    updateMask.SetCount(m_valuesCount);
+    uint32 valCount = m_valuesCount;
+    if (GetTypeId() == TYPEID_PLAYER && target != this)
+        valCount = PLAYER_END_NOT_SELF;
+
+    updateMask.SetCount(valCount);
 
     _SetUpdateBits(&updateMask, target);
     _BuildValuesUpdate(UPDATETYPE_VALUES, &buf, &updateMask, target);
@@ -311,150 +301,308 @@ void Object::DestroyForPlayer(Player* target, bool onDeath) const
 
 void Object::_BuildMovementUpdate(ByteBuffer* data, uint16 flags) const
 {
-    *data << uint16(flags);                                  // update flags
+    uint32 unkLoopCounter = 0;
+    // Bit content
+    data->WriteBit(0);
+    data->WriteBit(0);
+    data->WriteBit(flags & UPDATEFLAG_ROTATION);
+    data->WriteBit(flags & UPDATEFLAG_ANIMKITS);
+    data->WriteBit(flags & UPDATEFLAG_HAS_TARGET);
+    data->WriteBit(flags & UPDATEFLAG_SELF);
+    data->WriteBit(flags & UPDATEFLAG_VEHICLE);
+    data->WriteBit(flags & UPDATEFLAG_LIVING);
+    data->WriteBits(unkLoopCounter, 24);
+    data->WriteBit(0);
+    data->WriteBit(flags & UPDATEFLAG_GO_TRANSPORT_POSITION);
+    data->WriteBit(flags & UPDATEFLAG_STATIONARY_POSITION);
+    data->WriteBit(flags & UPDATEFLAG_UNK5);
+    data->WriteBit(0);
+    data->WriteBit(flags & UPDATEFLAG_TRANSPORT);
 
-    // 0x20
     if (flags & UPDATEFLAG_LIVING)
     {
-        ((Unit*)this)->BuildMovementPacket(data);
+        Unit const* self = ToUnit();
+        ObjectGuid guid = GetGUID();
+        uint32 movementFlags = self->m_movementInfo.GetMovementFlags();
+        uint16 movementFlagsExtra = self->m_movementInfo.GetExtraMovementFlags();
+        if (GetTypeId() == TYPEID_UNIT)
+            movementFlags &= MOVEMENTFLAG_MASK_CREATURE_ALLOWED;
 
-        *data << ((Unit*)this)->GetSpeed(MOVE_WALK);
-        *data << ((Unit*)this)->GetSpeed(MOVE_RUN);
-        *data << ((Unit*)this)->GetSpeed(MOVE_RUN_BACK);
-        *data << ((Unit*)this)->GetSpeed(MOVE_SWIM);
-        *data << ((Unit*)this)->GetSpeed(MOVE_SWIM_BACK);
-        *data << ((Unit*)this)->GetSpeed(MOVE_FLIGHT);
-        *data << ((Unit*)this)->GetSpeed(MOVE_FLIGHT_BACK);
-        *data << ((Unit*)this)->GetSpeed(MOVE_TURN_RATE);
-        *data << ((Unit*)this)->GetSpeed(MOVE_PITCH_RATE);
+        data->WriteBit(!movementFlags);
+        data->WriteBit(G3D::fuzzyEq(self->GetOrientation(), 0.0f));             // Has Orientation
+        data->WriteBit(guid[7]);
+        data->WriteBit(guid[3]);
+        data->WriteBit(guid[2]);
+        if (movementFlags)
+            data->WriteBits(movementFlags, 30);
 
-        // 0x08000000
-        if (((Unit*)this)->m_movementInfo.GetMovementFlags() & MOVEMENTFLAG_SPLINE_ENABLED)
-            Movement::PacketBuilder::WriteCreate(*((Unit*)this)->movespline, *data);
-    }
-    else
-    {
-        if (flags & UPDATEFLAG_POSITION)
+        data->WriteBit(0);
+        data->WriteBit(!((movementFlags & (MOVEMENTFLAG_SWIMMING | MOVEMENTFLAG_FLYING)) ||
+            (movementFlagsExtra & MOVEMENTFLAG2_ALWAYS_ALLOW_PITCHING)));       // Has pitch
+        data->WriteBit(self->IsSplineEnabled());                                // Has spline data
+        data->WriteBit(movementFlagsExtra & MOVEMENTFLAG2_INTERPOLATED_TURNING);// Has fall data
+        data->WriteBit(!(movementFlags & MOVEMENTFLAG_SPLINE_ELEVATION));       // Has spline elevation
+        data->WriteBit(guid[5]);
+        data->WriteBit(self->m_movementInfo.t_guid);                            // Has transport data
+        data->WriteBit(0);                                                      // Is missing time
+        if (self->m_movementInfo.t_guid)
         {
-            Transport* transport = ((WorldObject*)this)->GetTransport();
-            if (transport)
-                data->append(transport->GetPackGUID());
-            else
-                *data << uint8(0);
+            ObjectGuid transGuid = self->m_movementInfo.t_guid;
 
-            *data << ((WorldObject*)this)->GetPositionX();
-            *data << ((WorldObject*)this)->GetPositionY();
-            if (isType(TYPEMASK_UNIT))
-                *data << ((Unit*)this)->GetPositionZMinusOffset();
-            else
-                *data << ((WorldObject*)this)->GetPositionZ();
-
-            if (transport)
-            {
-                *data << ((WorldObject*)this)->GetTransOffsetX();
-                *data << ((WorldObject*)this)->GetTransOffsetY();
-                *data << ((WorldObject*)this)->GetTransOffsetZ();
-            }
-            else
-            {
-                *data << ((WorldObject*)this)->GetPositionX();
-                *data << ((WorldObject*)this)->GetPositionY();
-                if (isType(TYPEMASK_UNIT))
-                    *data << ((Unit*)this)->GetPositionZMinusOffset();
-                else
-                    *data << ((WorldObject*)this)->GetPositionZ();
-            }
-
-            *data << ((WorldObject*)this)->GetOrientation();
-
-            if (GetTypeId() == TYPEID_CORPSE)
-                *data << float(((WorldObject*)this)->GetOrientation());
-            else
-                *data << float(0);
+            data->WriteBit(transGuid[1]);
+            data->WriteBit(0);                                                  // Has transport time 2
+            data->WriteBit(transGuid[4]);
+            data->WriteBit(transGuid[0]);
+            data->WriteBit(transGuid[6]);
+            data->WriteBit(0);                                                  // Has transport time 3
+            data->WriteBit(transGuid[7]);
+            data->WriteBit(transGuid[5]);
+            data->WriteBit(transGuid[3]);
+            data->WriteBit(transGuid[2]);
         }
-        else
-        {
-            // 0x40
-            if (flags & UPDATEFLAG_STATIONARY_POSITION)
-            {
-                *data << ((WorldObject*)this)->GetPositionX();
-                *data << ((WorldObject*)this)->GetPositionY();
-                if (isType(TYPEMASK_UNIT))
-                    *data << ((Unit*)this)->GetPositionZMinusOffset();
-                else
-                    *data << ((WorldObject*)this)->GetPositionZ();
-                *data << ((WorldObject*)this)->GetOrientation();
-            }
-        }
+
+        data->WriteBit(guid[4]);
+        if (self->IsSplineEnabled())
+            Movement::PacketBuilder::WriteCreateBits(*self->movespline, *data);
+
+        data->WriteBit(guid[6]);
+        if (movementFlagsExtra & MOVEMENTFLAG2_INTERPOLATED_TURNING)
+            data->WriteBit(movementFlags & MOVEMENTFLAG_FALLING);
+
+        data->WriteBit(guid[0]);
+        data->WriteBit(guid[1]);
+        data->WriteBit(0);
+        data->WriteBit(!movementFlagsExtra);
+        if (movementFlagsExtra)
+            data->WriteBits(movementFlagsExtra, 12);
     }
 
-    // 0x8
-    if (flags & UPDATEFLAG_UNKNOWN)
+    if (flags & UPDATEFLAG_GO_TRANSPORT_POSITION)
     {
-        *data << uint32(0);
+        WorldObject const* self = static_cast<WorldObject const*>(this);
+        ObjectGuid transGuid = self->m_movementInfo.t_guid;
+        data->WriteBit(transGuid[5]);
+        data->WriteBit(0);                                                      // Has GO transport time 3
+        data->WriteBit(transGuid[0]);
+        data->WriteBit(transGuid[3]);
+        data->WriteBit(transGuid[6]);
+        data->WriteBit(transGuid[1]);
+        data->WriteBit(transGuid[4]);
+        data->WriteBit(transGuid[2]);
+        data->WriteBit(0);                                                      // Has GO transport time 2
+        data->WriteBit(transGuid[7]);
     }
 
-    // 0x10
-    if (flags & UPDATEFLAG_LOWGUID)
-    {
-        switch (GetTypeId())
-        {
-            case TYPEID_OBJECT:
-            case TYPEID_ITEM:
-            case TYPEID_CONTAINER:
-            case TYPEID_GAMEOBJECT:
-            case TYPEID_DYNAMICOBJECT:
-            case TYPEID_CORPSE:
-                *data << uint32(GetGUIDLow());              // GetGUIDLow()
-                break;
-            //! Unit, Player and default here are sending wrong values.
-            //! TODO: Research the proper formula
-            case TYPEID_UNIT:
-                *data << uint32(0x0000000B);                // unk
-                break;
-            case TYPEID_PLAYER:
-                if (flags & UPDATEFLAG_SELF)
-                    *data << uint32(0x0000002F);            // unk
-                else
-                    *data << uint32(0x00000008);            // unk
-                break;
-            default:
-                *data << uint32(0x00000000);                // unk
-                break;
-        }
-    }
-
-    // 0x4
     if (flags & UPDATEFLAG_HAS_TARGET)
     {
-        if (Unit* victim = ((Unit*)this)->getVictim())
-            data->append(victim->GetPackGUID());
-        else
-            *data << uint8(0);
+        ObjectGuid victimGuid = ToUnit()->getVictim()->GetGUID();   // checked in BuildCreateUpdateBlockForPlayer
+        data->WriteBit(victimGuid[2]);
+        data->WriteBit(victimGuid[7]);
+        data->WriteBit(victimGuid[0]);
+        data->WriteBit(victimGuid[4]);
+        data->WriteBit(victimGuid[5]);
+        data->WriteBit(victimGuid[6]);
+        data->WriteBit(victimGuid[1]);
+        data->WriteBit(victimGuid[3]);
     }
 
-    // 0x2
-    if (flags & UPDATEFLAG_TRANSPORT)
+    if (flags & UPDATEFLAG_ANIMKITS)
     {
-        *data << uint32(getMSTime());                       // Unknown - getMSTime is wrong.
+        data->WriteBit(1);                                                      // Missing AnimKit1
+        data->WriteBit(1);                                                      // Missing AnimKit2
+        data->WriteBit(1);                                                      // Missing AnimKit3
     }
 
-    // 0x80
+    data->FlushBits();
+
+    // Data
+    for (uint32 i = 0; i < unkLoopCounter; ++i)
+        *data << uint32(0);
+
+    if (flags & UPDATEFLAG_LIVING)
+    {
+        Unit const* self = ToUnit();
+        ObjectGuid guid = GetGUID();
+        uint32 movementFlags = self->m_movementInfo.GetMovementFlags();
+        uint16 movementFlagsExtra = self->m_movementInfo.GetExtraMovementFlags();
+        if (GetTypeId() == TYPEID_UNIT)
+            movementFlags &= MOVEMENTFLAG_MASK_CREATURE_ALLOWED;
+
+        data->WriteByteSeq(guid[4]);
+        *data << self->GetSpeed(MOVE_RUN_BACK);
+        if (movementFlagsExtra & MOVEMENTFLAG2_INTERPOLATED_TURNING)
+        {
+            if (movementFlags & MOVEMENTFLAG_FALLING)
+            {
+                *data << float(self->m_movementInfo.j_cosAngle);
+                *data << float(self->m_movementInfo.j_xyspeed);
+                *data << float(self->m_movementInfo.j_sinAngle);
+            }
+
+            *data << uint32(self->m_movementInfo.fallTime);
+            *data << float(self->m_movementInfo.j_zspeed);
+        }
+
+        *data << self->GetSpeed(MOVE_SWIM_BACK);
+        if (movementFlags & MOVEMENTFLAG_SPLINE_ELEVATION)
+            *data << float(self->m_movementInfo.splineElevation);
+
+        if (self->IsSplineEnabled())
+            Movement::PacketBuilder::WriteCreateData(*self->movespline, *data);
+
+        *data << float(self->GetPositionZMinusOffset());
+        data->WriteByteSeq(guid[5]);
+        if (self->m_movementInfo.t_guid)
+        {
+            ObjectGuid transGuid = self->m_movementInfo.t_guid;
+
+            data->WriteByteSeq(transGuid[5]);
+            data->WriteByteSeq(transGuid[7]);
+            *data << uint32(self->GetTransTime());
+            *data << float(self->GetTransOffsetO());
+            //if (hasTransportTime2)
+            //    *data << uint32(0);
+
+            *data << float(self->GetTransOffsetY());
+            *data << float(self->GetTransOffsetX());
+            data->WriteByteSeq(transGuid[3]);
+            *data << float(self->GetTransOffsetZ());
+            data->WriteByteSeq(transGuid[0]);
+            //if (hasTransportTime3)
+            //    *data << uint32(0);
+
+            *data << int8(self->GetTransSeat());
+            data->WriteByteSeq(transGuid[1]);
+            data->WriteByteSeq(transGuid[6]);
+            data->WriteByteSeq(transGuid[2]);
+            data->WriteByteSeq(transGuid[4]);
+        }
+
+        *data << float(self->GetPositionX());
+        *data << self->GetSpeed(MOVE_PITCH_RATE);
+        data->WriteByteSeq(guid[3]);
+        data->WriteByteSeq(guid[0]);
+        *data << self->GetSpeed(MOVE_SWIM);
+        *data << float(self->GetPositionY());
+        data->WriteByteSeq(guid[7]);
+        data->WriteByteSeq(guid[1]);
+        data->WriteByteSeq(guid[2]);
+        *data << self->GetSpeed(MOVE_WALK);
+
+        //if (true)   // Has time, controlled by bit just after HasTransport
+        *data << uint32(getMSTime());
+
+        *data << self->GetSpeed(MOVE_FLIGHT_BACK);
+        data->WriteByteSeq(guid[6]);
+        *data << self->GetSpeed(MOVE_TURN_RATE);
+        if (!G3D::fuzzyEq(self->GetOrientation(), 0.0f))
+            *data << float(self->GetOrientation());
+
+        *data << self->GetSpeed(MOVE_RUN);
+        if ((movementFlags & (MOVEMENTFLAG_SWIMMING | MOVEMENTFLAG_FLYING)) ||
+            (movementFlagsExtra & MOVEMENTFLAG2_ALWAYS_ALLOW_PITCHING))
+            *data << float(self->m_movementInfo.pitch);
+
+        *data << self->GetSpeed(MOVE_FLIGHT);
+    }
+
     if (flags & UPDATEFLAG_VEHICLE)
     {
-        // TODO: Allow players to aquire this updateflag.
-        *data << uint32(((Unit*)this)->GetVehicleKit()->GetVehicleInfo()->m_ID);
-        *data << float(((Creature*)this)->GetOrientation());
+        Unit const* self = ToUnit();
+        *data << float(self->GetOrientation());
+        *data << uint32(self->GetVehicleKit()->GetVehicleInfo()->m_ID);
     }
 
-    // 0x200
-    if (flags & UPDATEFLAG_ROTATION)
+    if (flags & UPDATEFLAG_GO_TRANSPORT_POSITION)
     {
-        *data << int64(((GameObject*)this)->GetRotation());
+        WorldObject const* self = static_cast<WorldObject const*>(this);
+        ObjectGuid transGuid = self->m_movementInfo.t_guid;
+
+        data->WriteBit(transGuid[0]);
+        data->WriteBit(transGuid[5]);
+        //if (hasTransportTime3)
+        //    *data << uint32(0);
+
+        data->WriteBit(transGuid[3]);
+        *data << float(self->GetTransOffsetX());
+        data->WriteBit(transGuid[4]);
+        data->WriteBit(transGuid[6]);
+        data->WriteBit(transGuid[1]);
+        *data << uint32(self->GetTransTime());
+        *data << float(self->GetTransOffsetY());
+        data->WriteBit(transGuid[2]);
+        data->WriteBit(transGuid[7]);
+        *data << float(self->GetTransOffsetZ());
+        *data << int8(self->GetTransSeat());
+        *data << float(self->GetTransOffsetO());
+        //if (hasTransportTime2)
+        //    *data << uint32(0);
     }
+
+    if (flags & UPDATEFLAG_ROTATION)
+        *data << uint64(ToGameObject()->GetRotation());
+
+    if (flags & UPDATEFLAG_UNK5)
+    {
+        *data << float(0.0f);
+        *data << float(0.0f);
+        *data << float(0.0f);
+        *data << float(0.0f);
+        *data << uint8(0);
+        *data << float(0.0f);
+        *data << float(0.0f);
+        *data << float(0.0f);
+        *data << float(0.0f);
+        *data << float(0.0f);
+        *data << float(0.0f);
+        *data << float(0.0f);
+        *data << float(0.0f);
+        *data << float(0.0f);
+        *data << float(0.0f);
+        *data << float(0.0f);
+        *data << float(0.0f);
+    }
+
+    if (flags & UPDATEFLAG_STATIONARY_POSITION)
+    {
+        WorldObject const* self = static_cast<WorldObject const*>(this);
+        *data << float(self->GetOrientation());
+        *data << float(self->GetPositionX());
+        *data << float(self->GetPositionY());
+        if (Unit const* unit = ToUnit())
+            *data << float(unit->GetPositionZMinusOffset());
+        else
+            *data << float(self->GetPositionZ());
+    }
+
+    if (flags & UPDATEFLAG_HAS_TARGET)
+    {
+        ObjectGuid victimGuid = ToUnit()->getVictim()->GetGUID();   // checked in BuildCreateUpdateBlockForPlayer
+        data->WriteByteSeq(victimGuid[4]);
+        data->WriteByteSeq(victimGuid[0]);
+        data->WriteByteSeq(victimGuid[3]);
+        data->WriteByteSeq(victimGuid[5]);
+        data->WriteByteSeq(victimGuid[7]);
+        data->WriteByteSeq(victimGuid[6]);
+        data->WriteByteSeq(victimGuid[2]);
+        data->WriteByteSeq(victimGuid[1]);
+    }
+
+    //if (flags & UPDATEFLAG_ANIMKITS)
+    //{
+    //    if (hasAnimKit1)
+    //        *data << uint16(animKit1);
+    //    if (hasAnimKit2)
+    //        *data << uint16(animKit2);
+    //    if (hasAnimKit3)
+    //        *data << uint16(animKit3);
+    //}
+
+    if (flags & UPDATEFLAG_TRANSPORT)
+        *data << uint32(getMSTime());                       // Unknown - getMSTime is wrong.
 }
 
-void Object::_BuildValuesUpdate(uint8 updatetype, ByteBuffer * data, UpdateMask* updateMask, Player* target) const
+void Object::_BuildValuesUpdate(uint8 updatetype, ByteBuffer* data, UpdateMask* updateMask, Player* target) const
 {
     if (!target)
         return;
@@ -496,7 +644,11 @@ void Object::_BuildValuesUpdate(uint8 updatetype, ByteBuffer * data, UpdateMask*
         }
     }
 
-    WPAssert(updateMask && updateMask->GetCount() == m_valuesCount);
+    uint32 valCount = m_valuesCount;
+    if (GetTypeId() == TYPEID_PLAYER && target != this)
+        valCount = PLAYER_END_NOT_SELF;
+
+    WPAssert(updateMask && updateMask->GetCount() == valCount);
 
     *data << (uint8)updateMask->GetBlockCount();
     data->append(updateMask->GetMask(), updateMask->GetLength());
@@ -504,7 +656,7 @@ void Object::_BuildValuesUpdate(uint8 updatetype, ByteBuffer * data, UpdateMask*
     // 2 specialized loops for speed optimization in non-unit case
     if (isType(TYPEMASK_UNIT))                               // unit (creature/player) case
     {
-        for (uint16 index = 0; index < m_valuesCount; ++index)
+        for (uint16 index = 0; index < valCount; ++index)
         {
             if (updateMask->GetBit(index))
             {
@@ -668,7 +820,7 @@ void Object::_BuildValuesUpdate(uint8 updatetype, ByteBuffer * data, UpdateMask*
     }
     else if (isType(TYPEMASK_GAMEOBJECT))                    // gameobject case
     {
-        for (uint16 index = 0; index < m_valuesCount; ++index)
+        for (uint16 index = 0; index < valCount; ++index)
         {
             if (updateMask->GetBit(index))
             {
@@ -684,35 +836,28 @@ void Object::_BuildValuesUpdate(uint8 updatetype, ByteBuffer * data, UpdateMask*
                                     *data << uint16(GO_DYNFLAG_LO_ACTIVATE);
                                 else
                                     *data << uint16(GO_DYNFLAG_LO_ACTIVATE | GO_DYNFLAG_LO_SPARKLE);
-                                *data << uint16(-1);
                                 break;
                             case GAMEOBJECT_TYPE_GENERIC:
                                 if (target->isGameMaster())
                                     *data << uint16(0);
                                 else
                                     *data << uint16(GO_DYNFLAG_LO_SPARKLE);
-                                *data << uint16(-1);
                                 break;
                             case GAMEOBJECT_TYPE_GOOBER:
                                 if (target->isGameMaster())
                                     *data << uint16(GO_DYNFLAG_LO_ACTIVATE);
                                 else
                                     *data << uint16(GO_DYNFLAG_LO_ACTIVATE | GO_DYNFLAG_LO_SPARKLE);
-                                *data << uint16(-1);
                                 break;
                             default:
-                                // unknown, not happen.
-                                *data << uint16(0);
-                                *data << uint16(-1);
+                                *data << uint16(0); // unknown, not happen.
                                 break;
                         }
                     }
                     else
-                    {
-                        // disable quest object
-                        *data << uint16(0);
-                        *data << uint16(-1);
-                    }
+                        *data << uint16(0);         // disable quest object
+
+                    *data << uint16(-1);
                 }
                 else if (index == GAMEOBJECT_FLAGS)
                 {
@@ -730,7 +875,7 @@ void Object::_BuildValuesUpdate(uint8 updatetype, ByteBuffer * data, UpdateMask*
     }
     else                                                    // other objects case (no special index checks)
     {
-        for (uint16 index = 0; index < m_valuesCount; ++index)
+        for (uint16 index = 0; index < valCount; ++index)
         {
             if (updateMask->GetBit(index))
             {
@@ -759,29 +904,12 @@ void Object::BuildFieldsUpdate(Player* player, UpdateDataMapType& data_map) cons
 
     if (iter == data_map.end())
     {
-        std::pair<UpdateDataMapType::iterator, bool> p = data_map.insert(UpdateDataMapType::value_type(player, UpdateData()));
+        std::pair<UpdateDataMapType::iterator, bool> p = data_map.insert(UpdateDataMapType::value_type(player, UpdateData(player->GetMapId())));
         ASSERT(p.second);
         iter = p.first;
     }
 
     BuildValuesUpdateBlockForPlayer(&iter->second, iter->first);
-}
-
-void Object::_LoadIntoDataField(char const* data, uint32 startOffset, uint32 count)
-{
-    if (!data)
-        return;
-
-    Tokens tokens(data, ' ', count);
-
-    if (tokens.size() != count)
-        return;
-
-    for (uint32 index = 0; index < count; ++index)
-    {
-        m_uint32Values[startOffset + index] = atol(tokens[index]);
-        _changedFields[startOffset + index] = true;
-    }
 }
 
 void Object::GetUpdateFieldData(Player const* target, uint32*& flags, bool& isOwner, bool& isItemOwner, bool& hasSpecialInfo, bool& isPartyMember) const
@@ -844,6 +972,23 @@ bool Object::IsUpdateFieldVisible(uint32 flags, bool isSelf, bool isOwner, bool 
     return false;
 }
 
+void Object::_LoadIntoDataField(std::string const& data, uint32 startOffset, uint32 count)
+{
+    if (data.empty())
+        return;
+
+    Tokenizer tokens(data, ' ', count);
+
+    if (tokens.size() != count)
+        return;
+
+    for (uint32 index = 0; index < count; ++index)
+    {
+        m_uint32Values[startOffset + index] = atol(tokens[index]);
+        _changedFields[startOffset + index] = true;
+    }
+}
+
 void Object::_SetUpdateBits(UpdateMask* updateMask, Player* target) const
 {
     bool* indexes = _changedFields;
@@ -856,7 +1001,11 @@ void Object::_SetUpdateBits(UpdateMask* updateMask, Player* target) const
 
     GetUpdateFieldData(target, flags, isOwner, isItemOwner, hasSpecialInfo, isPartyMember);
 
-    for (uint16 index = 0; index < m_valuesCount; ++index, ++indexes)
+    uint32 valCount = m_valuesCount;
+    if (GetTypeId() == TYPEID_PLAYER && target != this)
+        valCount = PLAYER_END_NOT_SELF;
+
+    for (uint16 index = 0; index < valCount; ++index, ++indexes)
         if (_fieldNotifyFlags & flags[index] || (flags[index] & UF_FLAG_SPECIAL_INFO && hasSpecialInfo) || (*indexes && IsUpdateFieldVisible(flags[index], isSelf, isOwner, isItemOwner, isPartyMember)))
             updateMask->SetBit(index);
 }
@@ -873,7 +1022,11 @@ void Object::_SetCreateBits(UpdateMask* updateMask, Player* target) const
 
     GetUpdateFieldData(target, flags, isOwner, isItemOwner, hasSpecialInfo, isPartyMember);
 
-    for (uint16 index = 0; index < m_valuesCount; ++index, ++value)
+    uint32 valCount = m_valuesCount;
+    if (GetTypeId() == TYPEID_PLAYER && target != this)
+        valCount = PLAYER_END_NOT_SELF;
+
+    for (uint16 index = 0; index < valCount; ++index, ++value)
         if (_fieldNotifyFlags & flags[index] || (flags[index] & UF_FLAG_SPECIAL_INFO && hasSpecialInfo) || (*value && IsUpdateFieldVisible(flags[index], isSelf, isOwner, isItemOwner, isPartyMember)))
             updateMask->SetBit(index);
 }
@@ -1244,7 +1397,7 @@ void MovementInfo::OutDebug()
     sLog->outInfo(LOG_FILTER_GENERAL, "flags2 %u", flags2);
     sLog->outInfo(LOG_FILTER_GENERAL, "time %u current time " UI64FMTD "", flags2, uint64(::time(NULL)));
     sLog->outInfo(LOG_FILTER_GENERAL, "position: `%s`", pos.ToString().c_str());
-    if (flags & MOVEMENTFLAG_ONTRANSPORT)
+    if (t_guid)
     {
         sLog->outInfo(LOG_FILTER_GENERAL, "TRANSPORT:");
         sLog->outInfo(LOG_FILTER_GENERAL, "guid: " UI64FMTD, t_guid);
@@ -1511,10 +1664,10 @@ bool WorldObject::IsInRange3d(float x, float y, float z, float minRange, float m
 
 void Position::RelocateOffset(const Position & offset)
 {
-    m_positionX = GetPositionX() + (offset.GetPositionX() * cos(GetOrientation()) + offset.GetPositionY() * sin(GetOrientation() + M_PI));
-    m_positionY = GetPositionY() + (offset.GetPositionY() * cos(GetOrientation()) + offset.GetPositionX() * sin(GetOrientation()));
+    m_positionX = GetPositionX() + (offset.GetPositionX() * std::cos(GetOrientation()) + offset.GetPositionY() * std::sin(GetOrientation() + M_PI));
+    m_positionY = GetPositionY() + (offset.GetPositionY() * std::cos(GetOrientation()) + offset.GetPositionX() * std::sin(GetOrientation()));
     m_positionZ = GetPositionZ() + offset.GetPositionZ();
-    m_orientation = GetOrientation() + offset.GetOrientation();
+    SetOrientation(GetOrientation() + offset.GetOrientation());
 }
 
 void Position::GetPositionOffsetTo(const Position & endPos, Position & retOffset) const
@@ -1522,10 +1675,10 @@ void Position::GetPositionOffsetTo(const Position & endPos, Position & retOffset
     float dx = endPos.GetPositionX() - GetPositionX();
     float dy = endPos.GetPositionY() - GetPositionY();
 
-    retOffset.m_positionX = dx * cos(GetOrientation()) + dy * sin(GetOrientation());
-    retOffset.m_positionY = dy * cos(GetOrientation()) - dx * sin(GetOrientation());
+    retOffset.m_positionX = dx * std::cos(GetOrientation()) + dy * std::sin(GetOrientation());
+    retOffset.m_positionY = dy * std::cos(GetOrientation()) - dx * std::sin(GetOrientation());
     retOffset.m_positionZ = endPos.GetPositionZ() - GetPositionZ();
-    retOffset.m_orientation = endPos.GetOrientation() - GetOrientation();
+    retOffset.SetOrientation(endPos.GetOrientation() - GetOrientation());
 }
 
 float Position::GetAngle(const Position* obj) const
@@ -1555,8 +1708,8 @@ void Position::GetSinCos(const float x, const float y, float &vsin, float &vcos)
     if (fabs(dx) < 0.001f && fabs(dy) < 0.001f)
     {
         float angle = (float)rand_norm()*static_cast<float>(2*M_PI);
-        vcos = cos(angle);
-        vsin = sin(angle);
+        vcos = std::cos(angle);
+        vsin = std::sin(angle);
     }
     else
     {
@@ -1573,13 +1726,13 @@ bool Position::HasInArc(float arc, const Position* obj) const
         return true;
 
     // move arc to range 0.. 2*pi
-    arc = MapManager::NormalizeOrientation(arc);
+    arc = NormalizeOrientation(arc);
 
     float angle = GetAngle(obj);
     angle -= m_orientation;
 
     // move angle to range -pi ... +pi
-    angle = MapManager::NormalizeOrientation(angle);
+    angle = NormalizeOrientation(angle);
     if (angle > M_PI)
         angle -= 2.0f*M_PI;
 
@@ -1605,7 +1758,7 @@ bool WorldObject::IsInBetween(const WorldObject* obj1, const WorldObject* obj2, 
     float angle = obj1->GetAngle(obj2);
 
     // not using sqrt() for performance
-    return (size * size) >= GetExactDist2dSq(obj1->GetPositionX() + cos(angle) * dist, obj1->GetPositionY() + sin(angle) * dist);
+    return (size * size) >= GetExactDist2dSq(obj1->GetPositionX() + std::cos(angle) * dist, obj1->GetPositionY() + std::sin(angle) * dist);
 }
 
 bool WorldObject::isInFront(WorldObject const* target,  float arc) const
@@ -1630,8 +1783,8 @@ void WorldObject::GetRandomPoint(const Position &pos, float distance, float &ran
     float angle = (float)rand_norm()*static_cast<float>(2*M_PI);
     float new_dist = (float)rand_norm()*static_cast<float>(distance);
 
-    rand_x = pos.m_positionX + new_dist * cos(angle);
-    rand_y = pos.m_positionY + new_dist * sin(angle);
+    rand_x = pos.m_positionX + new_dist * std::cos(angle);
+    rand_y = pos.m_positionY + new_dist * std::sin(angle);
     rand_z = pos.m_positionZ;
 
     Trinity::NormalizeMapCoord(rand_x);
@@ -2124,13 +2277,13 @@ void WorldObject::MonsterWhisper(int32 textId, uint64 receiver, bool IsBossWhisp
     player->GetSession()->SendPacket(&data);
 }
 
-void WorldObject::BuildMonsterChat(WorldPacket* data, uint8 msgtype, char const* text, uint32 language, char const* name, uint64 targetGuid) const
+void WorldObject::BuildMonsterChat(WorldPacket* data, uint8 msgtype, char const* text, uint32 language, std::string const &name, uint64 targetGuid) const
 {
     *data << (uint8)msgtype;
     *data << (uint32)language;
     *data << (uint64)GetGUID();
     *data << (uint32)0;                                     // 2.1.0
-    *data << (uint32)(strlen(name)+1);
+    *data << (uint32)(name.size()+1);
     *data << name;
     *data << (uint64)targetGuid;                            // Unit Target
     if (targetGuid && !IS_PLAYER_GUID(targetGuid))
@@ -2649,8 +2802,8 @@ namespace Trinity
 
 void WorldObject::GetNearPoint2D(float &x, float &y, float distance2d, float absAngle) const
 {
-    x = GetPositionX() + (GetObjectSize() + distance2d) * cos(absAngle);
-    y = GetPositionY() + (GetObjectSize() + distance2d) * sin(absAngle);
+    x = GetPositionX() + (GetObjectSize() + distance2d) * std::cos(absAngle);
+    y = GetPositionY() + (GetObjectSize() + distance2d) * std::sin(absAngle);
 
     Trinity::NormalizeMapCoord(x);
     Trinity::NormalizeMapCoord(y);
@@ -2783,10 +2936,10 @@ void WorldObject::GetNearPoint(WorldObject const* /*searcher*/, float &x, float 
 
 void WorldObject::MovePosition(Position &pos, float dist, float angle)
 {
-    angle += m_orientation;
+    angle += GetOrientation();
     float destx, desty, destz, ground, floor;
-    destx = pos.m_positionX + dist * cos(angle);
-    desty = pos.m_positionY + dist * sin(angle);
+    destx = pos.m_positionX + dist * std::cos(angle);
+    desty = pos.m_positionY + dist * std::sin(angle);
 
     // Prevent invalid coordinates here, position is unchanged
     if (!Trinity::IsValidMapCoord(destx, desty))
@@ -2806,8 +2959,8 @@ void WorldObject::MovePosition(Position &pos, float dist, float angle)
         // do not allow too big z changes
         if (fabs(pos.m_positionZ - destz) > 6)
         {
-            destx -= step * cos(angle);
-            desty -= step * sin(angle);
+            destx -= step * std::cos(angle);
+            desty -= step * std::sin(angle);
             ground = GetMap()->GetHeight(GetPhaseMask(), destx, desty, MAX_HEIGHT, true);
             floor = GetMap()->GetHeight(GetPhaseMask(), destx, desty, pos.m_positionZ, true);
             destz = fabs(ground - pos.m_positionZ) <= fabs(floor - pos.m_positionZ) ? ground : floor;
@@ -2823,16 +2976,16 @@ void WorldObject::MovePosition(Position &pos, float dist, float angle)
     Trinity::NormalizeMapCoord(pos.m_positionX);
     Trinity::NormalizeMapCoord(pos.m_positionY);
     UpdateGroundPositionZ(pos.m_positionX, pos.m_positionY, pos.m_positionZ);
-    pos.m_orientation = m_orientation;
+    pos.SetOrientation(GetOrientation());
 }
 
 void WorldObject::MovePositionToFirstCollision(Position &pos, float dist, float angle)
 {
-    angle += m_orientation;
+    angle += GetOrientation();
     float destx, desty, destz, ground, floor;
     pos.m_positionZ += 2.0f;
-    destx = pos.m_positionX + dist * cos(angle);
-    desty = pos.m_positionY + dist * sin(angle);
+    destx = pos.m_positionX + dist * std::cos(angle);
+    desty = pos.m_positionY + dist * std::sin(angle);
 
     // Prevent invalid coordinates here, position is unchanged
     if (!Trinity::IsValidMapCoord(destx, desty))
@@ -2851,8 +3004,8 @@ void WorldObject::MovePositionToFirstCollision(Position &pos, float dist, float 
     if (col)
     {
         // move back a bit
-        destx -= CONTACT_DISTANCE * cos(angle);
-        desty -= CONTACT_DISTANCE * sin(angle);
+        destx -= CONTACT_DISTANCE * std::cos(angle);
+        desty -= CONTACT_DISTANCE * std::sin(angle);
         dist = sqrt((pos.m_positionX - destx)*(pos.m_positionX - destx) + (pos.m_positionY - desty)*(pos.m_positionY - desty));
     }
 
@@ -2862,8 +3015,8 @@ void WorldObject::MovePositionToFirstCollision(Position &pos, float dist, float 
     // Collided with a gameobject
     if (col)
     {
-        destx -= CONTACT_DISTANCE * cos(angle);
-        desty -= CONTACT_DISTANCE * sin(angle);
+        destx -= CONTACT_DISTANCE * std::cos(angle);
+        desty -= CONTACT_DISTANCE * std::sin(angle);
         dist = sqrt((pos.m_positionX - destx)*(pos.m_positionX - destx) + (pos.m_positionY - desty)*(pos.m_positionY - desty));
     }
 
@@ -2874,8 +3027,8 @@ void WorldObject::MovePositionToFirstCollision(Position &pos, float dist, float 
         // do not allow too big z changes
         if (fabs(pos.m_positionZ - destz) > 6)
         {
-            destx -= step * cos(angle);
-            desty -= step * sin(angle);
+            destx -= step * std::cos(angle);
+            desty -= step * std::sin(angle);
             ground = GetMap()->GetHeight(GetPhaseMask(), destx, desty, MAX_HEIGHT, true);
             floor = GetMap()->GetHeight(GetPhaseMask(), destx, desty, pos.m_positionZ, true);
             destz = fabs(ground - pos.m_positionZ) <= fabs(floor - pos.m_positionZ) ? ground : floor;
@@ -2891,7 +3044,7 @@ void WorldObject::MovePositionToFirstCollision(Position &pos, float dist, float 
     Trinity::NormalizeMapCoord(pos.m_positionX);
     Trinity::NormalizeMapCoord(pos.m_positionY);
     UpdateAllowedPositionZ(pos.m_positionX, pos.m_positionY, pos.m_positionZ);
-    pos.m_orientation = m_orientation;
+    pos.SetOrientation(GetOrientation());
 }
 
 void WorldObject::SetPhaseMask(uint32 newPhaseMask, bool update)

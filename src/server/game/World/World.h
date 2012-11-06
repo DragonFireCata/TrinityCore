@@ -45,11 +45,19 @@ class SystemMgr;
 // ServerMessages.dbc
 enum ServerMessageType
 {
-    SERVER_MSG_SHUTDOWN_TIME      = 1,
-    SERVER_MSG_RESTART_TIME       = 2,
-    SERVER_MSG_STRING             = 3,
-    SERVER_MSG_SHUTDOWN_CANCELLED = 4,
-    SERVER_MSG_RESTART_CANCELLED  = 5
+    SERVER_MSG_SHUTDOWN_TIME          = 1,
+    SERVER_MSG_RESTART_TIME           = 2,
+    SERVER_MSG_STRING                 = 3,
+    SERVER_MSG_SHUTDOWN_CANCELLED     = 4,
+    SERVER_MSG_RESTART_CANCELLED      = 5,
+    SERVER_MSG_BG_SHUTDOWN_TIME       = 6,
+    SERVER_MSG_BG_RESTART_TIME        = 7,
+    SERVER_MSG_INSTANCE_SHUTDOWN_TIME = 8,
+    SERVER_MSG_INSTANCE_RESTART_TIME  = 9,
+    SERVER_MSG_CONTENT_READY          = 10,
+    SERVER_MSG_TICKET_SERVICED_SOON   = 11,
+    SERVER_MSG_WAIT_TIME_UNAVAILABLE  = 12,
+    SERVER_MSG_TICKET_WAIT_TIME       = 13,
 };
 
 enum ShutdownMask
@@ -78,6 +86,7 @@ enum WorldTimers
     WUPDATE_MAILBOXQUEUE,
     WUPDATE_DELETECHARS,
     WUPDATE_PINGDB,
+    WUPDATE_GUILDSAVE,
     WUPDATE_COUNT
 };
 
@@ -114,7 +123,6 @@ enum WorldBoolConfigs
     CONFIG_SKILL_MILLING,
     CONFIG_SAVE_RESPAWN_TIME_IMMEDIATELY,
     CONFIG_WEATHER,
-    CONFIG_ALWAYS_MAX_SKILL_FOR_LEVEL,
     CONFIG_QUEST_IGNORE_RAID,
     CONFIG_DETECT_POS_COLLISION,
     CONFIG_RESTRICTED_LFG_CHANNEL,
@@ -155,7 +163,6 @@ enum WorldBoolConfigs
     CONFIG_CHATLOG_PUBLIC,
     CONFIG_CHATLOG_ADDON,
     CONFIG_CHATLOG_BGROUND,
-    CONFIG_DUNGEON_FINDER_ENABLE,
     CONFIG_AUTOBROADCAST,
     CONFIG_ALLOW_TICKETS,
     CONFIG_DBC_ENFORCE_ITEM_ATTRIBUTES,
@@ -166,6 +173,7 @@ enum WorldBoolConfigs
     CONFIG_QUEST_IGNORE_AUTO_COMPLETE,
     CONFIG_WARDEN_ENABLED,
     CONFIG_WINTERGRASP_ENABLE,
+    CONFIG_GUILD_LEVELING_ENABLED,
     BOOL_CONFIG_VALUE_COUNT
 };
 
@@ -219,8 +227,10 @@ enum WorldIntConfigs
     CONFIG_START_PLAYER_MONEY,
     CONFIG_MAX_HONOR_POINTS,
     CONFIG_START_HONOR_POINTS,
-    CONFIG_MAX_ARENA_POINTS,
-    CONFIG_START_ARENA_POINTS,
+    CONFIG_MAX_JUSTICE_POINTS,
+    CONFIG_START_JUSTICE_POINTS,
+    CONFIG_MAX_ARENA_POINTS,//todo: remove
+    CONFIG_START_ARENA_POINTS,//todo: remove
     CONFIG_MAX_RECRUIT_A_FRIEND_BONUS_PLAYER_LEVEL,
     CONFIG_MAX_RECRUIT_A_FRIEND_BONUS_PLAYER_LEVEL_DIFFERENCE,
     CONFIG_INSTANCE_RESET_TIME_HOUR,
@@ -245,9 +255,7 @@ enum WorldIntConfigs
     CONFIG_SKILL_CHANCE_MINING_STEPS,
     CONFIG_SKILL_CHANCE_SKINNING_STEPS,
     CONFIG_SKILL_GAIN_CRAFTING,
-    CONFIG_SKILL_GAIN_DEFENSE,
     CONFIG_SKILL_GAIN_GATHERING,
-    CONFIG_SKILL_GAIN_WEAPON,
     CONFIG_MAX_OVERSPEED_PINGS,
     CONFIG_EXPANSION,
     CONFIG_CHATFLOOD_MESSAGE_COUNT,
@@ -304,6 +312,7 @@ enum WorldIntConfigs
     CONFIG_GUILD_BANK_EVENT_LOG_COUNT,
     CONFIG_MIN_LEVEL_STAT_SAVE,
     CONFIG_RANDOM_BG_RESET_HOUR,
+    CONFIG_GUILD_RESET_HOUR,
     CONFIG_CHARDELETE_KEEP_DAYS,
     CONFIG_CHARDELETE_METHOD,
     CONFIG_CHARDELETE_MIN_LEVEL,
@@ -313,6 +322,7 @@ enum WorldIntConfigs
     CONFIG_DB_PING_INTERVAL,
     CONFIG_PRESERVE_CUSTOM_CHANNEL_DURATION,
     CONFIG_PERSISTENT_CHARACTER_CLEAN_FLAGS,
+    CONFIG_LFG_OPTIONSMASK,
     CONFIG_MAX_INSTANCES_PER_HOUR,
     CONFIG_WARDEN_CLIENT_RESPONSE_DELAY,
     CONFIG_WARDEN_CLIENT_CHECK_HOLDOFF,
@@ -326,6 +336,11 @@ enum WorldIntConfigs
     CONFIG_WINTERGRASP_BATTLETIME,
     CONFIG_WINTERGRASP_NOBATTLETIME,
     CONFIG_WINTERGRASP_RESTART_AFTER_CRASH,
+    CONFIG_GUILD_SAVE_INTERVAL,
+    CONFIG_GUILD_MAX_LEVEL,
+    CONFIG_GUILD_UNDELETABLE_LEVEL,
+    CONFIG_GUILD_DAILY_XP_CAP,
+    CONFIG_GUILD_WEEKLY_REP_CAP,
     INT_CONFIG_VALUE_COUNT
 };
 
@@ -353,6 +368,7 @@ enum Rates
     RATE_DROP_MONEY,
     RATE_XP_KILL,
     RATE_XP_QUEST,
+    RATE_XP_GUILD_MODIFIER,
     RATE_XP_EXPLORE,
     RATE_REPAIRCOST,
     RATE_REPUTATION_GAIN,
@@ -468,8 +484,10 @@ enum RealmZone
 
 enum WorldStates
 {
-    WS_WEEKLY_QUEST_RESET_TIME = 20002,                      // Next weekly reset time
-    WS_BG_DAILY_RESET_TIME     = 20003                       // Next daily BG reset time
+    WS_WEEKLY_QUEST_RESET_TIME  = 20002,                    // Next weekly reset time
+    WS_BG_DAILY_RESET_TIME      = 20003,                    // Next daily BG reset time
+    WS_GUILD_DAILY_RESET_TIME   = 20006,                    // Next guild cap reset time
+    WS_GUILD_WEEKLY_RESET_TIME  = 20007,                    // Next guild week reset time
 };
 
 // DB scripting commands
@@ -538,6 +556,7 @@ struct CharacterNameData
     uint8 m_class;
     uint8 m_race;
     uint8 m_gender;
+    uint8 m_level;
 };
 
 /// The World
@@ -604,19 +623,19 @@ class World
         void SetAllowMovement(bool allow) { m_allowMovement = allow; }
 
         /// Set a new Message of the Day
-        void SetMotd(const std::string& motd);
+        void SetMotd(std::string const& motd);
         /// Get the current Message of the Day
         const char* GetMotd() const;
 
         /// Set the string for new characters (first login)
-        void SetNewCharString(std::string str) { m_newCharString = str; }
+        void SetNewCharString(std::string const& str) { m_newCharString = str; }
         /// Get the string for new characters (first login)
-        const std::string& GetNewCharString() const { return m_newCharString; }
+        std::string const& GetNewCharString() const { return m_newCharString; }
 
         LocaleConstant GetDefaultDbcLocale() const { return m_defaultDbcLocale; }
 
         /// Get the path where data (dbc, maps) are stored on disk
-        std::string GetDataPath() const { return m_dataPath; }
+        std::string const& GetDataPath() const { return m_dataPath; }
 
         /// When server started?
         time_t const& GetStartTime() const { return m_startTime; }
@@ -636,7 +655,7 @@ class World
         /// Get the maximum skill level a player can reach
         uint16 GetConfigMaxSkillValue() const
         {
-            uint8 lvl = getIntConfig(CONFIG_MAX_PLAYER_LEVEL);
+            uint8 lvl = uint8(getIntConfig(CONFIG_MAX_PLAYER_LEVEL));
             return lvl > 60 ? 300 + ((lvl - 60) * 75) / 10 : lvl*5;
         }
 
@@ -719,10 +738,10 @@ class World
 
         void KickAll();
         void KickAllLess(AccountTypes sec);
-        BanReturn BanAccount(BanMode mode, std::string nameOrIP, std::string duration, std::string reason, std::string author);
-        bool RemoveBanAccount(BanMode mode, std::string nameOrIP);
-        BanReturn BanCharacter(std::string name, std::string duration, std::string reason, std::string author);
-        bool RemoveBanCharacter(std::string name);
+        BanReturn BanAccount(BanMode mode, std::string const& nameOrIP, std::string const& duration, std::string const& reason, std::string const& author);
+        bool RemoveBanAccount(BanMode mode, std::string const& nameOrIP);
+        BanReturn BanCharacter(std::string const& name, std::string const& duration, std::string const& reason, std::string const& author);
+        bool RemoveBanCharacter(std::string const& name);
 
         // for max speed access
         static float GetMaxVisibleDistanceOnContinents()    { return m_MaxVisibleDistanceOnContinents; }
@@ -759,13 +778,17 @@ class World
         bool isEventKillStart;
 
         CharacterNameData const* GetCharacterNameData(uint32 guid) const;
-        void AddCharacterNameData(uint32 guid, std::string const& name, uint8 gender, uint8 race, uint8 playerClass);
+        void AddCharacterNameData(uint32 guid, std::string const& name, uint8 gender, uint8 race, uint8 playerClass, uint8 level);
         void UpdateCharacterNameData(uint32 guid, std::string const& name, uint8 gender = GENDER_NONE, uint8 race = RACE_NONE);
-        void DeleteCharaceterNameData(uint32 guid) { _characterNameDataMap.erase(guid); }
+        void UpdateCharacterNameDataLevel(uint32 guid, uint8 level);
+
+        void DeleteCharacterNameData(uint32 guid) { _characterNameDataMap.erase(guid); }
 
         uint32 GetCleaningFlags() const { return m_CleaningFlags; }
         void   SetCleaningFlags(uint32 flags) { m_CleaningFlags = flags; }
         void   ResetEventSeasonalQuests(uint16 event_id);
+
+        void UpdatePhaseDefinitions();
     protected:
         void _UpdateGameTime();
         // callback for UpdateRealmCharacters
@@ -774,9 +797,11 @@ class World
         void InitDailyQuestResetTime();
         void InitWeeklyQuestResetTime();
         void InitRandomBGResetTime();
+        void InitGuildResetTime();
         void ResetDailyQuests();
         void ResetWeeklyQuests();
         void ResetRandomBG();
+        void ResetGuildCap();
     private:
         static ACE_Atomic_Op<ACE_Thread_Mutex, bool> m_stopEvent;
         static uint8 m_ExitCode;
@@ -837,6 +862,7 @@ class World
         time_t m_NextDailyQuestReset;
         time_t m_NextWeeklyQuestReset;
         time_t m_NextRandomBGReset;
+        time_t m_NextGuildReset;
 
         //Player Queue
         Queue m_QueuedPlayer;

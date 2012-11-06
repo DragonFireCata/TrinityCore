@@ -116,7 +116,7 @@
 #define I32FMT "%08I32X"
 #define I64FMT "%016I64X"
 #define snprintf _snprintf
-#define atoll __atoi64
+#define atoll _atoi64
 #define vsnprintf _vsnprintf
 #define finite(X) _finite(X)
 #define llabs _abs64
@@ -129,14 +129,6 @@
 #define I64FMT "%016llX"
 
 #endif
-
-#define UI64FMTD ACE_UINT64_FORMAT_SPECIFIER
-#define UI64LIT(N) ACE_UINT64_LITERAL(N)
-
-#define SI64FMTD ACE_INT64_FORMAT_SPECIFIER
-#define SI64LIT(N) ACE_INT64_LITERAL(N)
-
-#define SIZEFMTD ACE_SIZE_T_FORMAT_SPECIFIER
 
 inline float finiteAlways(float f) { return finite(f) ? f : 0.0f; }
 

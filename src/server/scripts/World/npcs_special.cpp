@@ -1268,7 +1268,7 @@ public:
         if (player->GetSpecsCount() == 1 && creature->isCanTrainingAndResetTalentsOf(player) && player->getLevel() >= sWorld->getIntConfig(CONFIG_MIN_DUALSPEC_LEVEL))
             player->ADD_GOSSIP_ITEM(GOSSIP_ICON_TRAINER, GOSSIP_HELLO_ROGUE3, GOSSIP_SENDER_MAIN, GOSSIP_OPTION_LEARNDUALSPEC);
 
-        if (player->getClass() == CLASS_ROGUE && player->getLevel() >= 24 && !player->HasItemCount(17126, 1) && !player->GetQuestRewardStatus(6681))
+        if (player->getClass() == CLASS_ROGUE && player->getLevel() >= 24 && !player->HasItemCount(17126) && !player->GetQuestRewardStatus(6681))
         {
             player->ADD_GOSSIP_ITEM(GOSSIP_ICON_CHAT, GOSSIP_HELLO_ROGUE2, GOSSIP_SENDER_MAIN, GOSSIP_ACTION_INFO_DEF + 1);
             player->SEND_GOSSIP_MENU(5996, creature->GetGUID());
@@ -1297,7 +1297,7 @@ public:
             case GOSSIP_OPTION_LEARNDUALSPEC:
                 if (player->GetSpecsCount() == 1 && !(player->getLevel() < sWorld->getIntConfig(CONFIG_MIN_DUALSPEC_LEVEL)))
                 {
-                    if (!player->HasEnoughMoney(10000000))
+                    if (!player->HasEnoughMoney(uint64(10000000)))
                     {
                         player->SendBuyError(BUY_ERR_NOT_ENOUGHT_MONEY, 0, 0, 0);
                         player->PlayerTalkClass->SendCloseGossip();
@@ -1305,7 +1305,7 @@ public:
                     }
                     else
                     {
-                        player->ModifyMoney(-10000000);
+                        player->ModifyMoney(int64(-10000000));
 
                         // Cast spells that teach dual spec
                         // Both are also ImplicitTarget self and must be cast by player
@@ -1954,8 +1954,8 @@ public:
             me->AddUnitMovementFlag(MOVEMENTFLAG_CAN_FLY|MOVEMENTFLAG_ASCENDING|MOVEMENTFLAG_FLYING);
             me->SetSpeed(MOVE_FLIGHT, 0.75f, true);
             me->SetSpeed(MOVE_RUN, 0.75f, true);
-            float x = me->GetPositionX() + 20 * cos(me->GetOrientation());
-            float y = me->GetPositionY() + 20 * sin(me->GetOrientation());
+            float x = me->GetPositionX() + 20 * std::cos(me->GetOrientation());
+            float y = me->GetPositionY() + 20 * std::sin(me->GetOrientation());
             float z = me->GetPositionZ() + 40;
             me->GetMotionMaster()->Clear(false);
             me->GetMotionMaster()->MovePoint(0, x, y, z);
@@ -2115,14 +2115,12 @@ class npc_shadowfiend : public CreatureScript
         {
             npc_shadowfiendAI(Creature* creature) : PetAI(creature) {}
 
-            void JustDied(Unit* killer)
+            void JustDied(Unit* /*killer*/)
             {
                 if (me->isSummon())
                     if (Unit* owner = me->ToTempSummon()->GetSummoner())
                         if (owner->HasAura(GLYPH_OF_SHADOWFIEND))
                             owner->CastSpell(owner, GLYPH_OF_SHADOWFIEND_MANA, true);
-
-                PetAI::JustDied(killer);
             }
         };
 
@@ -2610,11 +2608,11 @@ public:
         }
         if (doSwitch)
         {
-            if (!player->HasEnoughMoney(EXP_COST))
+            if (!player->HasEnoughMoney(uint64(EXP_COST)))
                 player->SendBuyError(BUY_ERR_NOT_ENOUGHT_MONEY, 0, 0, 0);
             else if (noXPGain)
             {
-                player->ModifyMoney(-EXP_COST);
+                player->ModifyMoney(-int64(EXP_COST));
                 player->RemoveFlag(PLAYER_FLAGS, PLAYER_FLAGS_NO_XP_GAIN);
             }
             else if (!noXPGain)

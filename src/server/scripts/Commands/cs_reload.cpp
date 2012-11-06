@@ -27,7 +27,6 @@ EndScriptData */
 #include "SpellMgr.h"
 #include "TicketMgr.h"
 #include "MapManager.h"
-#include "CreatureEventAIMgr.h"
 #include "DisableMgr.h"
 #include "LFGMgr.h"
 #include "AuctionHouseMgr.h"
@@ -50,7 +49,6 @@ public:
         {
             { "achievement", SEC_ADMINISTRATOR,  true,  &HandleReloadAllAchievementCommand, "", NULL },
             { "area",       SEC_ADMINISTRATOR,  true,  &HandleReloadAllAreaCommand,       "", NULL },
-            { "eventai",    SEC_ADMINISTRATOR,  true,  &HandleReloadAllEventAICommand,    "", NULL },
             { "gossips",    SEC_ADMINISTRATOR,  true,  &HandleReloadAllGossipsCommand,    "", NULL },
             { "item",       SEC_ADMINISTRATOR,  true,  &HandleReloadAllItemCommand,       "", NULL },
             { "locales",    SEC_ADMINISTRATOR,  true,  &HandleReloadAllLocalesCommand,    "", NULL },
@@ -77,9 +75,6 @@ public:
             { "conditions",                   SEC_ADMINISTRATOR, true,  &HandleReloadConditions,                        "", NULL },
             { "config",                       SEC_ADMINISTRATOR, true,  &HandleReloadConfigCommand,                     "", NULL },
             { "creature_text",                SEC_ADMINISTRATOR, true,  &HandleReloadCreatureText,                      "", NULL },
-            { "creature_ai_scripts",          SEC_ADMINISTRATOR, true,  &HandleReloadEventAIScriptsCommand,             "", NULL },
-            { "creature_ai_summons",          SEC_ADMINISTRATOR, true,  &HandleReloadEventAISummonsCommand,             "", NULL },
-            { "creature_ai_texts",            SEC_ADMINISTRATOR, true,  &HandleReloadEventAITextsCommand,               "", NULL },
             { "creature_involvedrelation",    SEC_ADMINISTRATOR, true,  &HandleReloadCreatureQuestInvRelationsCommand,  "", NULL },
             { "creature_linked_respawn",      SEC_GAMEMASTER,    true,  &HandleReloadLinkedRespawnCommand,              "", NULL },
             { "creature_loot_template",       SEC_ADMINISTRATOR, true,  &HandleReloadLootTemplatesCreatureCommand,      "", NULL },
@@ -102,7 +97,6 @@ public:
             { "gossip_menu_option",           SEC_ADMINISTRATOR, true,  &HandleReloadGossipMenuOptionCommand,           "", NULL },
             { "item_enchantment_template",    SEC_ADMINISTRATOR, true,  &HandleReloadItemEnchantementsCommand,          "", NULL },
             { "item_loot_template",           SEC_ADMINISTRATOR, true,  &HandleReloadLootTemplatesItemCommand,          "", NULL },
-            { "item_set_names",               SEC_ADMINISTRATOR, true,  &HandleReloadItemSetNamesCommand,               "", NULL },
             { "lfg_dungeon_rewards",          SEC_ADMINISTRATOR, true,  &HandleReloadLfgRewardsCommand,                 "", NULL },
             { "locales_achievement_reward",   SEC_ADMINISTRATOR, true,  &HandleReloadLocalesAchievementRewardCommand,   "", NULL },
             { "locales_creature",             SEC_ADMINISTRATOR, true,  &HandleReloadLocalesCreatureCommand,            "", NULL },
@@ -110,7 +104,6 @@ public:
             { "locales_gameobject",           SEC_ADMINISTRATOR, true,  &HandleReloadLocalesGameobjectCommand,          "", NULL },
             { "locales_gossip_menu_option",   SEC_ADMINISTRATOR, true,  &HandleReloadLocalesGossipMenuOptionCommand,    "", NULL },
             { "locales_item",                 SEC_ADMINISTRATOR, true,  &HandleReloadLocalesItemCommand,                "", NULL },
-            { "locales_item_set_name",        SEC_ADMINISTRATOR, true,  &HandleReloadLocalesItemSetNameCommand,         "", NULL },
             { "locales_npc_text",             SEC_ADMINISTRATOR, true,  &HandleReloadLocalesNpcTextCommand,             "", NULL },
             { "locales_page_text",            SEC_ADMINISTRATOR, true,  &HandleReloadLocalesPageTextCommand,            "", NULL },
             { "locales_points_of_interest",   SEC_ADMINISTRATOR, true,  &HandleReloadLocalesPointsOfInterestCommand,    "", NULL },
@@ -122,6 +115,7 @@ public:
             { "npc_trainer",                  SEC_ADMINISTRATOR, true,  &HandleReloadNpcTrainerCommand,                 "", NULL },
             { "npc_vendor",                   SEC_ADMINISTRATOR, true,  &HandleReloadNpcVendorCommand,                  "", NULL },
             { "page_text",                    SEC_ADMINISTRATOR, true,  &HandleReloadPageTextsCommand,                  "", NULL },
+            { "phasedefinitions",             SEC_ADMINISTRATOR, true,  &HandleReloadPhaseDefinitionsCommand,           "", NULL },
             { "pickpocketing_loot_template",  SEC_ADMINISTRATOR, true,  &HandleReloadLootTemplatesPickpocketingCommand, "", NULL},
             { "points_of_interest",           SEC_ADMINISTRATOR, true,  &HandleReloadPointsOfInterestCommand,           "", NULL },
             { "prospecting_loot_template",    SEC_ADMINISTRATOR, true,  &HandleReloadLootTemplatesProspectingCommand,   "", NULL },
@@ -181,7 +175,6 @@ public:
 
         HandleReloadAllAchievementCommand(handler, "");
         HandleReloadAllAreaCommand(handler, "");
-        HandleReloadAllEventAICommand(handler, "");
         HandleReloadAllLootCommand(handler, "");
         HandleReloadAllNpcCommand(handler, "");
         HandleReloadAllQuestCommand(handler, "");
@@ -270,14 +263,6 @@ public:
         HandleReloadDbScriptStringCommand(handler, "a");
         HandleReloadWpScriptsCommand(handler, "a");
         HandleReloadWpCommand(handler, "a");
-        return true;
-    }
-
-    static bool HandleReloadAllEventAICommand(ChatHandler* handler, const char* /*args*/)
-    {
-        HandleReloadEventAITextsCommand(handler, "a");
-        HandleReloadEventAISummonsCommand(handler, "a");
-        HandleReloadEventAIScriptsCommand(handler, "a");
         return true;
     }
 
@@ -408,9 +393,9 @@ public:
         if (!*args)
             return false;
 
-        Tokens entries(std::string(args), ' ');
+        Tokenizer entries(std::string(args), ' ');
 
-        for (Tokens::const_iterator itr = entries.begin(); itr != entries.end(); ++itr)
+        for (Tokenizer::const_iterator itr = entries.begin(); itr != entries.end(); ++itr)
         {
             uint32 entry = uint32(atoi(*itr));
 
@@ -504,20 +489,21 @@ public:
             cInfo->HoverHeight        = fields[68].GetFloat();
             cInfo->ModHealth          = fields[69].GetFloat();
             cInfo->ModMana            = fields[70].GetFloat();
-            cInfo->ModArmor           = fields[71].GetFloat();
-            cInfo->RacialLeader       = fields[72].GetBool();
-            cInfo->questItems[0]      = fields[73].GetUInt32();
-            cInfo->questItems[1]      = fields[74].GetUInt32();
-            cInfo->questItems[2]      = fields[75].GetUInt32();
-            cInfo->questItems[3]      = fields[76].GetUInt32();
-            cInfo->questItems[4]      = fields[77].GetUInt32();
-            cInfo->questItems[5]      = fields[78].GetUInt32();
-            cInfo->movementId         = fields[79].GetUInt32();
-            cInfo->RegenHealth        = fields[80].GetBool();
-            cInfo->equipmentId        = fields[81].GetUInt32();
-            cInfo->MechanicImmuneMask = fields[82].GetUInt32();
-            cInfo->flags_extra        = fields[83].GetUInt32();
-            cInfo->ScriptID           = sObjectMgr->GetScriptId(fields[84].GetCString());
+            cInfo->ModManaExtra       = fields[71].GetFloat();
+            cInfo->ModArmor           = fields[72].GetFloat();
+            cInfo->RacialLeader       = fields[73].GetBool();
+            cInfo->questItems[0]      = fields[74].GetUInt32();
+            cInfo->questItems[1]      = fields[75].GetUInt32();
+            cInfo->questItems[2]      = fields[76].GetUInt32();
+            cInfo->questItems[3]      = fields[77].GetUInt32();
+            cInfo->questItems[4]      = fields[78].GetUInt32();
+            cInfo->questItems[5]      = fields[79].GetUInt32();
+            cInfo->movementId         = fields[80].GetUInt32();
+            cInfo->RegenHealth        = fields[81].GetBool();
+            cInfo->equipmentId        = fields[82].GetUInt32();
+            cInfo->MechanicImmuneMask = fields[83].GetUInt32();
+            cInfo->flags_extra        = fields[84].GetUInt32();
+            cInfo->ScriptID           = sObjectMgr->GetScriptId(fields[85].GetCString());
 
             sObjectMgr->CheckCreatureTemplate(cInfo);
         }
@@ -947,14 +933,6 @@ public:
         return true;
     }
 
-    static bool HandleReloadItemSetNamesCommand(ChatHandler* handler, const char* /*args*/)
-    {
-        sLog->outInfo(LOG_FILTER_GENERAL, "Re-Loading Item set names...");
-        sObjectMgr->LoadItemSetNames();
-        handler->SendGlobalGMSysMessage("DB table `item_set_names` reloaded.");
-        return true;
-    }
-
     static bool HandleReloadGameObjectScriptsCommand(ChatHandler* handler, const char* args)
     {
         if (sScriptMgr->IsScriptScheduled())
@@ -1025,31 +1003,6 @@ public:
         if (*args != 'a')
             handler->SendGlobalGMSysMessage("DB Table 'waypoint_data' reloaded.");
 
-        return true;
-    }
-
-    static bool HandleReloadEventAITextsCommand(ChatHandler* handler, const char* /*args*/)
-    {
-
-        sLog->outInfo(LOG_FILTER_GENERAL, "Re-Loading Texts from `creature_ai_texts`...");
-        sEventAIMgr->LoadCreatureEventAI_Texts();
-        handler->SendGlobalGMSysMessage("DB table `creature_ai_texts` reloaded.");
-        return true;
-    }
-
-    static bool HandleReloadEventAISummonsCommand(ChatHandler* handler, const char* /*args*/)
-    {
-        sLog->outInfo(LOG_FILTER_GENERAL, "Re-Loading Summons from `creature_ai_summons`...");
-        sEventAIMgr->LoadCreatureEventAI_Summons();
-        handler->SendGlobalGMSysMessage("DB table `creature_ai_summons` reloaded.");
-        return true;
-    }
-
-    static bool HandleReloadEventAIScriptsCommand(ChatHandler* handler, const char* /*args*/)
-    {
-        sLog->outInfo(LOG_FILTER_GENERAL, "Re-Loading Scripts from `creature_ai_scripts`...");
-        sEventAIMgr->LoadCreatureEventAI_Scripts();
-        handler->SendGlobalGMSysMessage("DB table `creature_ai_scripts` reloaded.");
         return true;
     }
 
@@ -1209,14 +1162,6 @@ public:
         return true;
     }
 
-    static bool HandleReloadLocalesItemSetNameCommand(ChatHandler* handler, const char* /*args*/)
-    {
-        sLog->outInfo(LOG_FILTER_GENERAL, "Re-Loading Locales Item set name... ");
-        sObjectMgr->LoadItemSetNameLocales();
-        handler->SendGlobalGMSysMessage("DB table `locales_item_set_name` reloaded.");
-        return true;
-    }
-
     static bool HandleReloadLocalesNpcTextCommand(ChatHandler* handler, const char* /*args*/)
     {
         sLog->outInfo(LOG_FILTER_GENERAL, "Re-Loading Locales NPC Text ... ");
@@ -1304,6 +1249,15 @@ public:
         sLog->outInfo(LOG_FILTER_GENERAL, "Reloading vehicle_template_accessory table...");
         sObjectMgr->LoadVehicleTemplateAccessories();
         handler->SendGlobalGMSysMessage("Vehicle template accessories reloaded.");
+        return true;
+    }
+
+    static bool HandleReloadPhaseDefinitionsCommand(ChatHandler* handler, const char* /*args*/)
+    {
+        sLog->outInfo(LOG_FILTER_GENERAL, "Reloading phase_definitions table...");
+        sObjectMgr->LoadPhaseDefinitions();
+        sWorld->UpdatePhaseDefinitions();
+        handler->SendGlobalGMSysMessage("Phase Definitions reloaded.");
         return true;
     }
 };

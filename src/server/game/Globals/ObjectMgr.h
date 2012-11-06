@@ -42,8 +42,10 @@
 #include <limits>
 #include "ConditionMgr.h"
 #include <functional>
+#include "PhaseMgr.h"
 
 class Item;
+class PhaseMgr;
 
 // GCC have alternative #pragma pack(N) syntax and old gcc version not support pack(push, N), also any gcc version not support it at some platform
 #if defined(__GNUC__)
@@ -389,7 +391,6 @@ typedef UNORDERED_MAP<uint32, GameObjectData> GameObjectDataContainer;
 typedef UNORDERED_MAP<uint32, CreatureLocale> CreatureLocaleContainer;
 typedef UNORDERED_MAP<uint32, GameObjectLocale> GameObjectLocaleContainer;
 typedef UNORDERED_MAP<uint32, ItemLocale> ItemLocaleContainer;
-typedef UNORDERED_MAP<uint32, ItemSetNameLocale> ItemSetNameLocaleContainer;
 typedef UNORDERED_MAP<uint32, QuestLocale> QuestLocaleContainer;
 typedef UNORDERED_MAP<uint32, NpcTextLocale> NpcTextLocaleContainer;
 typedef UNORDERED_MAP<uint32, PageTextLocale> PageTextLocaleContainer;
@@ -578,6 +579,15 @@ struct DungeonEncounter
 typedef std::list<DungeonEncounter const*> DungeonEncounterList;
 typedef UNORDERED_MAP<uint32, DungeonEncounterList> DungeonEncounterContainer;
 
+struct HotfixInfo
+{
+    uint32 Type;
+    uint32 Timestamp;
+    uint32 Entry;
+};
+
+typedef std::vector<HotfixInfo> HotfixData;
+
 class PlayerDumpReader;
 
 class ObjectMgr
@@ -614,7 +624,7 @@ class ObjectMgr
 
         GameObjectTemplate const* GetGameObjectTemplate(uint32 entry);
         GameObjectTemplateContainer const* GetGameObjectTemplates() const { return &_gameObjectTemplateStore; }
-        int LoadReferenceVendor(int32 vendor, int32 item_id, std::set<uint32> *skip_vendors);
+        int LoadReferenceVendor(int32 vendor, int32 item, uint8 type, std::set<uint32> *skip_vendors);
 
         void LoadGameObjectTemplate();
         void AddGameobjectInfo(GameObjectTemplate* goinfo);
@@ -631,25 +641,11 @@ class ObjectMgr
         ItemTemplate const* GetItemTemplate(uint32 entry);
         ItemTemplateContainer const* GetItemTemplateStore() const { return &_itemTemplateStore; }
 
-        ItemSetNameEntry const* GetItemSetNameEntry(uint32 itemId)
-        {
-            ItemSetNameContainer::iterator itr = _itemSetNameStore.find(itemId);
-            if (itr != _itemSetNameStore.end())
-                return &itr->second;
-            return NULL;
-        }
-
         InstanceTemplate const* GetInstanceTemplate(uint32 mapId);
 
         PetLevelInfo const* GetPetLevelInfo(uint32 creature_id, uint8 level) const;
 
-        PlayerClassInfo const* GetPlayerClassInfo(uint32 class_) const
-        {
-            if (class_ >= MAX_CLASSES)
-                return NULL;
-            return &_playerClassInfo[class_];
-        }
-        void GetPlayerClassLevelInfo(uint32 class_, uint8 level, PlayerClassLevelInfo* info) const;
+        void GetPlayerClassLevelInfo(uint32 class_, uint8 level, uint32& baseHP, uint32& baseMana) const;
 
         PlayerInfo const* GetPlayerInfo(uint32 race, uint32 class_) const
         {
@@ -665,11 +661,11 @@ class ObjectMgr
 
         void GetPlayerLevelInfo(uint32 race, uint32 class_, uint8 level, PlayerLevelInfo* info) const;
 
-        uint64 GetPlayerGUIDByName(std::string name) const;
+        uint64 GetPlayerGUIDByName(std::string const& name) const;
         bool GetPlayerNameByGUID(uint64 guid, std::string &name) const;
         uint32 GetPlayerTeamByGUID(uint64 guid) const;
         uint32 GetPlayerAccountIdByGUID(uint64 guid) const;
-        uint32 GetPlayerAccountIdByPlayerName(const std::string& name) const;
+        uint32 GetPlayerAccountIdByPlayerName(std::string const& name) const;
 
         uint32 GetNearestTaxiNode(float x, float y, float z, uint32 mapid, uint32 team);
         void GetTaxiPath(uint32 source, uint32 destination, uint32 &path, uint32 &cost);
@@ -748,6 +744,8 @@ class ObjectMgr
                 return &itr->second;
             return NULL;
         }
+
+        int32 GetBaseReputationOff(FactionEntry const* factionEntry, uint8 race, uint8 playerClass);
 
         RepSpilloverTemplate const* GetRepSpilloverTemplate(uint32 factionId) const
         {
@@ -858,9 +856,9 @@ class ObjectMgr
         void LoadGameObjectLocales();
         void LoadGameobjects();
         void LoadItemTemplates();
+        void LoadItemTemplateAddon();
+        void LoadItemScriptNames();
         void LoadItemLocales();
-        void LoadItemSetNames();
-        void LoadItemSetNameLocales();
         void LoadQuestLocales();
         void LoadNpcTextLocales();
         void LoadPageTextLocales();
@@ -910,6 +908,12 @@ class ObjectMgr
         void LoadTrainerSpell();
         void AddSpellToTrainer(uint32 entry, uint32 spell, uint32 spellCost, uint32 reqSkill, uint32 reqSkillValue, uint32 reqLevel);
 
+        void LoadPhaseDefinitions();
+        void LoadSpellPhaseInfo();
+
+        PhaseDefinitionStore const* GetPhaseDefinitionStore() { return &_PhaseDefinitionStore; }
+        SpellPhaseStore const* GetSpellPhaseStore() { return &_SpellPhaseStore; }
+
         std::string GeneratePetName(uint32 entry);
         uint32 GetBaseXP(uint8 level);
         uint32 GetXPForLevel(uint8 level) const;
@@ -930,6 +934,7 @@ class ObjectMgr
         uint64 GenerateEquipmentSetGuid();
         uint32 GenerateMailID();
         uint32 GeneratePetNumber();
+        uint64 GenerateVoidStorageItemId();
 
         typedef std::multimap<int32, uint32> ExclusiveQuestGroups;
         ExclusiveQuestGroups mExclusiveQuestGroups;
@@ -982,12 +987,6 @@ class ObjectMgr
         {
             ItemLocaleContainer::const_iterator itr = _itemLocaleStore.find(entry);
             if (itr == _itemLocaleStore.end()) return NULL;
-            return &itr->second;
-        }
-        ItemSetNameLocale const* GetItemSetNameLocale(uint32 entry) const
-        {
-            ItemSetNameLocaleContainer::const_iterator itr = _itemSetNameLocaleStore.find(entry);
-            if (itr == _itemSetNameLocaleStore.end())return NULL;
             return &itr->second;
         }
         QuestLocale const* GetQuestLocale(uint32 entry) const
@@ -1055,12 +1054,12 @@ class ObjectMgr
 
         // reserved names
         void LoadReservedPlayersNames();
-        bool IsReservedName(const std::string& name) const;
+        bool IsReservedName(std::string const& name) const;
 
         // name with valid structure and symbols
-        static uint8 CheckPlayerName(const std::string& name, bool create = false);
-        static PetNameInvalidReason CheckPetName(const std::string& name);
-        static bool IsValidCharterName(const std::string& name);
+        static uint8 CheckPlayerName(std::string const& name, bool create = false);
+        static PetNameInvalidReason CheckPetName(std::string const& name);
+        static bool IsValidCharterName(std::string const& name);
 
         static bool CheckDeclinedNames(std::wstring w_ownname, DeclinedName const& names);
 
@@ -1070,10 +1069,10 @@ class ObjectMgr
             if (itr == _gameTeleStore.end()) return NULL;
             return &itr->second;
         }
-        GameTele const* GetGameTele(const std::string& name) const;
+        GameTele const* GetGameTele(std::string const& name) const;
         GameTeleContainer const& GetGameTeleMap() const { return _gameTeleStore; }
         bool AddGameTele(GameTele& data);
-        bool DeleteGameTele(const std::string& name);
+        bool DeleteGameTele(std::string const& name);
 
         TrainerSpellData const* GetNpcTrainerSpells(uint32 entry) const
         {
@@ -1086,15 +1085,15 @@ class ObjectMgr
 
         VendorItemData const* GetNpcVendorItemList(uint32 entry) const
         {
-            CacheVendorItemContainer::const_iterator  iter = _cacheVendorItemStore.find(entry);
+            CacheVendorItemContainer::const_iterator iter = _cacheVendorItemStore.find(entry);
             if (iter == _cacheVendorItemStore.end())
                 return NULL;
 
             return &iter->second;
         }
-        void AddVendorItem(uint32 entry, uint32 item, int32 maxcount, uint32 incrtime, uint32 extendedCost, bool persist = true); // for event
-        bool RemoveVendorItem(uint32 entry, uint32 item, bool persist = true); // for event
-        bool IsVendorItemValid(uint32 vendor_entry, uint32 item, int32 maxcount, uint32 ptime, uint32 ExtendedCost, Player* player = NULL, std::set<uint32>* skip_vendors = NULL, uint32 ORnpcflag = 0) const;
+        void AddVendorItem(uint32 entry, uint32 item, int32 maxcount, uint32 incrtime, uint32 extendedCost, uint8 type, bool persist = true); // for event
+        bool RemoveVendorItem(uint32 entry, uint32 item, uint8 type, bool persist = true); // for event
+        bool IsVendorItemValid(uint32 vendor_entry, uint32 id, int32 maxcount, uint32 ptime, uint32 ExtendedCost, uint8 type, Player* player = NULL, std::set<uint32>* skip_vendors = NULL, uint32 ORnpcflag = 0) const;
 
         void LoadScriptNames();
         ScriptNameContainer &GetScriptNames() { return _scriptNamesStore; }
@@ -1128,7 +1127,7 @@ class ObjectMgr
         // for wintergrasp only
         GraveYardContainer GraveYardStore;
 
-        static void AddLocaleString(const std::string& s, LocaleConstant locale, StringVector& data);
+        static void AddLocaleString(std::string const& s, LocaleConstant locale, StringVector& data);
         static inline void GetLocaleString(const StringVector& data, int loc_idx, std::string& value)
         {
             if (data.size() > size_t(loc_idx) && !data[loc_idx].empty())
@@ -1147,6 +1146,19 @@ class ObjectMgr
         void LoadFactionChangeReputations();
         void LoadFactionChangeTitles();
 
+        void LoadHotfixData();
+        HotfixData const& GetHotfixData() const { return _hotfixData; }
+        time_t GetHotfixDate(uint32 entry, uint32 type) const
+        {
+            time_t ret = 0;
+            for (HotfixData::const_iterator itr = _hotfixData.begin(); itr != _hotfixData.end(); ++itr)
+                if (itr->Entry == entry && itr->Type == type)
+                    if (itr->Timestamp > ret)
+                        ret = itr->Timestamp;
+
+            return ret ? ret : time(NULL);
+        }
+
     private:
         // first free id for selected id type
         uint32 _auctionId;
@@ -1154,6 +1166,7 @@ class ObjectMgr
         uint32 _itemTextId;
         uint32 _mailId;
         uint32 _hiPetNumber;
+        uint64 _voidItemId;
 
         // first free low guid for selected guid type
         uint32 _hiCharGuid;
@@ -1217,10 +1230,13 @@ class ObjectMgr
         PageTextContainer _pageTextStore;
         InstanceTemplateContainer _instanceTemplateStore;
 
+        PhaseDefinitionStore _PhaseDefinitionStore;
+        SpellPhaseStore _SpellPhaseStore;
+
     private:
         void LoadScripts(ScriptsType type);
         void CheckScripts(ScriptsType type, std::set<int32>& ids);
-        void LoadQuestRelationsHelper(QuestRelations& map, std::string table, bool starter, bool go);
+        void LoadQuestRelationsHelper(QuestRelations& map, std::string const& table, bool starter, bool go);
         void PlayerCreateInfoAddItemHelper(uint32 race_, uint32 class_, uint32 itemId, int32 count);
 
         MailLevelRewardContainer _mailLevelRewardStore;
@@ -1230,8 +1246,6 @@ class ObjectMgr
         typedef std::map<uint32, PetLevelInfo*> PetLevelInfoContainer;
         // PetLevelInfoContainer[creature_id][level]
         PetLevelInfoContainer _petInfoStore;                            // [creature_id][level]
-
-        PlayerClassInfo _playerClassInfo[MAX_CLASSES];
 
         void BuildPlayerLevelInfo(uint8 race, uint8 class_, uint8 level, PlayerLevelInfo* plinfo) const;
 
@@ -1250,9 +1264,6 @@ class ObjectMgr
         HalfNameContainer _petHalfName0;
         HalfNameContainer _petHalfName1;
 
-        typedef UNORDERED_MAP<uint32, ItemSetNameEntry> ItemSetNameContainer;
-        ItemSetNameContainer _itemSetNameStore;
-
         MapObjectGuids _mapObjectGuidsStore;
         CreatureDataContainer _creatureDataStore;
         CreatureTemplateContainer _creatureTemplateStore;
@@ -1268,7 +1279,6 @@ class ObjectMgr
 
         ItemTemplateContainer _itemTemplateStore;
         ItemLocaleContainer _itemLocaleStore;
-        ItemSetNameLocaleContainer _itemSetNameLocaleStore;
         QuestLocaleContainer _questLocaleStore;
         NpcTextLocaleContainer _npcTextLocaleStore;
         PageTextLocaleContainer _pageTextLocaleStore;
@@ -1289,6 +1299,7 @@ class ObjectMgr
             GO_TO_GO,
             GO_TO_CREATURE          // GO is dependant on creature
         };
+        HotfixData _hotfixData;
 };
 
 #define sObjectMgr ACE_Singleton<ObjectMgr, ACE_Null_Mutex>::instance()

@@ -169,7 +169,7 @@ void MapManager::LoadTransportNPCs()
 Transport::Transport(uint32 period, uint32 script) : GameObject(), m_pathTime(0), m_timer(0),
 currenttguid(0), m_period(period), ScriptId(script), m_nextNodeTime(0)
 {
-    m_updateFlag = (UPDATEFLAG_TRANSPORT | UPDATEFLAG_LOWGUID | UPDATEFLAG_STATIONARY_POSITION | UPDATEFLAG_ROTATION);
+    m_updateFlag = (UPDATEFLAG_TRANSPORT | UPDATEFLAG_STATIONARY_POSITION | UPDATEFLAG_ROTATION);
 }
 
 Transport::~Transport()
@@ -507,7 +507,7 @@ void Transport::TeleportTransport(uint32 newMapid, float x, float y, float z)
 bool Transport::AddPassenger(Player* passenger)
 {
     if (m_passengers.insert(passenger).second)
-        sLog->outInfo(LOG_FILTER_TRANSPORTS, "Player %s boarded transport %s.", passenger->GetName(), GetName());
+        sLog->outInfo(LOG_FILTER_TRANSPORTS, "Player %s boarded transport %s.", passenger->GetName().c_str(), GetName().c_str());
 
     sScriptMgr->OnAddPassenger(this, passenger);
     return true;
@@ -516,7 +516,7 @@ bool Transport::AddPassenger(Player* passenger)
 bool Transport::RemovePassenger(Player* passenger)
 {
     if (m_passengers.erase(passenger))
-        sLog->outInfo(LOG_FILTER_TRANSPORTS, "Player %s removed from transport %s.", passenger->GetName(), GetName());
+        sLog->outInfo(LOG_FILTER_TRANSPORTS, "Player %s removed from transport %s.", passenger->GetName().c_str(), GetName().c_str());
 
     sScriptMgr->OnRemovePassenger(this, passenger);
     return true;
@@ -580,7 +580,7 @@ void Transport::UpdateForMap(Map const* targetMap)
         {
             if (this != itr->getSource()->GetTransport())
             {
-                UpdateData transData;
+                UpdateData transData(GetMapId());
                 BuildCreateUpdateBlockForPlayer(&transData, itr->getSource());
                 WorldPacket packet;
                 transData.BuildPacket(&packet);
@@ -590,7 +590,7 @@ void Transport::UpdateForMap(Map const* targetMap)
     }
     else
     {
-        UpdateData transData;
+        UpdateData transData(targetMap->GetId());
         BuildOutOfRangeUpdateBlock(&transData);
         WorldPacket out_packet;
         transData.BuildPacket(&out_packet);
@@ -605,7 +605,7 @@ void Transport::DoEventIfAny(WayPointMap::value_type const& node, bool departure
 {
     if (uint32 eventid = departure ? node.second.departureEventID : node.second.arrivalEventID)
     {
-        sLog->outDebug(LOG_FILTER_MAPSCRIPTS, "Taxi %s event %u of node %u of %s path", departure ? "departure" : "arrival", eventid, node.first, GetName());
+        sLog->outDebug(LOG_FILTER_MAPSCRIPTS, "Taxi %s event %u of node %u of %s path", departure ? "departure" : "arrival", eventid, node.first, GetName().c_str());
         GetMap()->ScriptsStart(sEventScripts, eventid, this, this);
         EventInform(eventid);
     }
@@ -638,16 +638,15 @@ uint32 Transport::AddNPCPassenger(uint32 tguid, uint32 entry, float x, float y, 
     }
 
     creature->SetTransport(this);
-    creature->AddUnitMovementFlag(MOVEMENTFLAG_ONTRANSPORT);
-    creature->m_movementInfo.guid = GetGUID();
+    creature->m_movementInfo.t_guid = GetGUID();
     creature->m_movementInfo.t_pos.Relocate(x, y, z, o);
 
     if (anim)
         creature->SetUInt32Value(UNIT_NPC_EMOTESTATE, anim);
 
     creature->Relocate(
-        GetPositionX() + (x * cos(GetOrientation()) + y * sin(GetOrientation() + float(M_PI))),
-        GetPositionY() + (y * cos(GetOrientation()) + x * sin(GetOrientation())),
+        GetPositionX() + (x * std::cos(GetOrientation()) + y * std::sin(GetOrientation() + float(M_PI))),
+        GetPositionY() + (y * std::cos(GetOrientation()) + x * std::sin(GetOrientation())),
         z + GetPositionZ(),
         o + GetOrientation());
 
@@ -679,9 +678,9 @@ uint32 Transport::AddNPCPassenger(uint32 tguid, uint32 entry, float x, float y, 
 
 void Transport::UpdatePosition(MovementInfo* mi)
 {
-    float transport_o = mi->pos.m_orientation - mi->t_pos.m_orientation;
-    float transport_x = mi->pos.m_positionX - (mi->t_pos.m_positionX * cos(transport_o) - mi->t_pos.m_positionY*sin(transport_o));
-    float transport_y = mi->pos.m_positionY - (mi->t_pos.m_positionY * cos(transport_o) + mi->t_pos.m_positionX*sin(transport_o));
+    float transport_o = mi->pos.GetOrientation() - mi->t_pos.GetOrientation();
+    float transport_x = mi->pos.m_positionX - (mi->t_pos.m_positionX * std::cos(transport_o) - mi->t_pos.m_positionY*sin(transport_o));
+    float transport_y = mi->pos.m_positionY - (mi->t_pos.m_positionY * std::cos(transport_o) + mi->t_pos.m_positionX*sin(transport_o));
     float transport_z = mi->pos.m_positionZ - mi->t_pos.m_positionZ;
 
     Relocate(transport_x, transport_y, transport_z, transport_o);
@@ -708,18 +707,18 @@ void Transport::CalculatePassengerPosition(float& x, float& y, float& z, float& 
 {
     float inx = x, iny = y, inz = z, ino = o;
     o = GetOrientation() + ino;
-    x = GetPositionX() + inx * cos(GetOrientation()) - iny * sin(GetOrientation());
-    y = GetPositionY() + iny * cos(GetOrientation()) + inx * sin(GetOrientation());
+    x = GetPositionX() + inx * std::cos(GetOrientation()) - iny * std::sin(GetOrientation());
+    y = GetPositionY() + iny * std::cos(GetOrientation()) + inx * std::sin(GetOrientation());
     z = GetPositionZ() + inz;
 }
 
 void Transport::CalculatePassengerOffset(float& x, float& y, float& z, float& o)
 {
-    o -= GetOrientation();
+    o = o - GetOrientation();
     z -= GetPositionZ();
-    y -= GetPositionY();    // y = searchedY * cos(o) + searchedX * sin(o)
-    x -= GetPositionX();    // x = searchedX * cos(o) + searchedY * sin(o + pi)
+    y -= GetPositionY();    // y = searchedY * std::cos(o) + searchedX * std::sin(o)
+    x -= GetPositionX();    // x = searchedX * std::cos(o) + searchedY * std::sin(o + pi)
     float inx = x, iny = y;
-    y = (iny - inx * tan(GetOrientation())) / (cos(GetOrientation()) + sin(GetOrientation()) * tan(GetOrientation()));
-    x = (inx + iny * tan(GetOrientation())) / (cos(GetOrientation()) + sin(GetOrientation()) * tan(GetOrientation()));
+    y = (iny - inx * tan(GetOrientation())) / (cos(GetOrientation()) + std::sin(GetOrientation()) * tan(GetOrientation()));
+    x = (inx + iny * tan(GetOrientation())) / (cos(GetOrientation()) + std::sin(GetOrientation()) * tan(GetOrientation()));
 }

@@ -19,12 +19,12 @@
 #ifndef TRINITY_DEFINE_H
 #define TRINITY_DEFINE_H
 
-#include <sys/types.h>
+#include "CompilerDefs.h"
 
 #include <ace/Basic_Types.h>
 #include <ace/ACE_export.h>
 
-#include "CompilerDefs.h"
+#include <cstddef>
 
 #define TRINITY_LITTLEENDIAN 0
 #define TRINITY_BIGENDIAN    1
@@ -70,6 +70,14 @@
 #  define ATTR_DEPRECATED
 #endif //COMPILER == COMPILER_GNU
 
+#define UI64FMTD ACE_UINT64_FORMAT_SPECIFIER
+#define UI64LIT(N) ACE_UINT64_LITERAL(N)
+
+#define SI64FMTD ACE_INT64_FORMAT_SPECIFIER
+#define SI64LIT(N) ACE_INT64_LITERAL(N)
+
+#define SIZEFMTD ACE_SIZE_T_FORMAT_SPECIFIER
+
 typedef ACE_INT64 int64;
 typedef ACE_INT32 int32;
 typedef ACE_INT16 int16;
@@ -79,4 +87,18 @@ typedef ACE_UINT32 uint32;
 typedef ACE_UINT16 uint16;
 typedef ACE_UINT8 uint8;
 
+enum DBCFormer
+{
+    FT_NA='x',                                              //not used or unknown, 4 byte size
+    FT_NA_BYTE='X',                                         //not used or unknown, byte
+    FT_STRING='s',                                          //char*
+    FT_FLOAT='f',                                           //float
+    FT_INT='i',                                             //uint32
+    FT_BYTE='b',                                            //uint8
+    FT_SORT='d',                                            //sorted by this field, field is not included
+    FT_IND='n',                                             //the same, but parsed to data
+    FT_LOGIC='l',                                            //Logical (boolean)
+    FT_SQL_PRESENT='p',                                      //Used in sql format to mark column present in sql dbc
+    FT_SQL_ABSENT='a'                                       //Used in sql format to mark column absent in sql dbc
+};
 #endif //TRINITY_DEFINE_H

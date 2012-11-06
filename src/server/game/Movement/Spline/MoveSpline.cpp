@@ -19,6 +19,7 @@
 #include "MoveSpline.h"
 #include <sstream>
 #include "Log.h"
+#include "Unit.h"
 
 namespace Movement{
 
@@ -50,15 +51,15 @@ Location MoveSpline::ComputePosition() const
         if (splineflags.final_angle)
             c.orientation = facing.angle;
         else if (splineflags.final_point)
-            c.orientation = atan2(facing.f.y-c.y, facing.f.x-c.x);
+            c.orientation = atan2(facing.f.y - c.y, facing.f.x - c.x);
         //nothing to do for MoveSplineFlag::Final_Target flag
     }
     else
     {
-        if (!splineflags.hasFlag(MoveSplineFlag::OrientationFixed|MoveSplineFlag::Falling))
+        if (!splineflags.hasFlag(MoveSplineFlag::OrientationFixed | MoveSplineFlag::Falling | MoveSplineFlag::Unknown0))
         {
             Vector3 hermite;
-            spline.evaluate_derivative(point_Idx,u,hermite);
+            spline.evaluate_derivative(point_Idx, u, hermite);
             c.orientation = atan2(hermite.y, hermite.x);
         }
 
@@ -172,6 +173,13 @@ void MoveSpline::Initialize(const MoveSplineInitArgs& args)
     vertical_acceleration = 0.f;
     effect_start_time = 0;
 
+    // Check if its a stop spline
+    if (args.flags.done)
+    {
+        spline.clear();
+        return;
+    }
+
     init_spline(args);
 
     // init parabolic / animation
@@ -195,12 +203,12 @@ MoveSpline::MoveSpline() : m_Id(0), time_passed(0),
 
 /// ============================================================================================
 
-bool MoveSplineInitArgs::Validate() const
+bool MoveSplineInitArgs::Validate(Unit* unit) const
 {
 #define CHECK(exp) \
     if (!(exp))\
     {\
-        sLog->outError(LOG_FILTER_GENERAL, "MoveSplineInitArgs::Validate: expression '%s' failed", #exp);\
+        sLog->outError(LOG_FILTER_GENERAL, "MoveSplineInitArgs::Validate: expression '%s' failed for GUID: %u", #exp, unit->GetTypeId() == TYPEID_PLAYER ? unit->GetGUIDLow() : unit->ToCreature()->GetDBTableGUIDLow());\
         return false;\
     }
     CHECK(path.size() > 1);
@@ -215,7 +223,7 @@ bool MoveSplineInitArgs::Validate() const
 // each vertex offset packed into 11 bytes
 bool MoveSplineInitArgs::_checkPathBounds() const
 {
-    if (!(flags & MoveSplineFlag::Mask_CatmullRom) && path.size() > 2)
+    if (!(flags & MoveSplineFlag::Catmullrom) && path.size() > 2)
     {
         enum{
             MAX_OFFSET = (1 << 11) / 2
@@ -265,7 +273,7 @@ MoveSpline::UpdateResult MoveSpline::_updateState(int32& ms_time_diff)
             {
                 point_Idx = spline.first();
                 time_passed = time_passed % Duration();
-                result = Result_NextSegment;
+                result = Result_NextCycle;
             }
             else
             {
