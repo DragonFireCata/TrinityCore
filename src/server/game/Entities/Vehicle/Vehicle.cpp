@@ -29,6 +29,7 @@
 #include "SpellMgr.h"
 #include "SpellInfo.h"
 #include "MoveSplineInit.h"
+#include "TemporarySummon.h"
 
 Vehicle::Vehicle(Unit* unit, VehicleEntry const* vehInfo, uint32 creatureEntry) : _me(unit), _vehicleInfo(vehInfo), _usableSeatNum(0), _creatureEntry(creatureEntry)
 {
@@ -361,9 +362,9 @@ bool Vehicle::AddPassenger(Unit* unit, int8 seatId)
 
     if (_me->IsInWorld())
     {
-        unit->SendClearTarget();                                 // SMSG_BREAK_TARGET
-        unit->SetControlled(true, UNIT_STATE_ROOT);              // SMSG_FORCE_ROOT - In some cases we send SMSG_SPLINE_MOVE_ROOT here (for creatures)
-                                                                 // also adds MOVEMENTFLAG_ROOT
+        unit->SendClearTarget();                            // SMSG_BREAK_TARGET
+        unit->SetControlled(true, UNIT_STATE_ROOT);         // SMSG_FORCE_ROOT - In some cases we send SMSG_SPLINE_MOVE_ROOT here (for creatures)
+                                                            // also adds MOVEMENTFLAG_ROOT
         Movement::MoveSplineInit init(*unit);
         init.DisableTransportPathTransformations();
         init.MoveTo(veSeat->m_attachmentOffsetX, veSeat->m_attachmentOffsetY, veSeat->m_attachmentOffsetZ);

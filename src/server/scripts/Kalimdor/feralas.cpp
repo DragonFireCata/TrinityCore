@@ -16,19 +16,6 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-/* ScriptData
-SDName: Feralas
-SD%Complete: 0
-SDComment: Quest support:
-SDCategory: Feralas
-EndScriptData */
-
-#include "ScriptMgr.h"
-#include "ScriptedCreature.h"
-#include "ScriptedEscortAI.h"
-#include "ScriptedGossip.h"
-#include "SpellScript.h"
-
 void AddSC_feralas()
 {
 

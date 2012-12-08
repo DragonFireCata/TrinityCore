@@ -39,6 +39,7 @@ enum ArenaTeamCommandTypes
 
 enum ArenaTeamCommandErrors
 {
+    ERR_ARENA_TEAM_CREATED                  = 0x00,
     ERR_ARENA_TEAM_INTERNAL                 = 0x01,
     ERR_ALREADY_IN_ARENA_TEAM               = 0x02,
     ERR_ALREADY_IN_ARENA_TEAM_S             = 0x03,
@@ -129,6 +130,7 @@ class ArenaTeam
         uint32 GetType() const            { return Type; }
         uint8  GetSlot() const            { return GetSlotByType(GetType()); }
         static uint8 GetSlotByType(uint32 type);
+        static uint8 GetTypeBySlot(uint8 slot);
         uint64 GetCaptain() const  { return CaptainGuid; }
         std::string const& GetName() const       { return TeamName; }
         const ArenaTeamStats& GetStats() const { return Stats; }
@@ -163,12 +165,13 @@ class ArenaTeam
         void BroadcastEvent(ArenaTeamEvents event, uint64 guid, uint8 strCount, std::string const& str1, std::string const& str2, std::string const& str3);
         void NotifyStatsChanged();
 
+        void MassInviteToEvent(WorldSession* session);
+
         void Roster(WorldSession* session);
         void Query(WorldSession* session);
         void SendStats(WorldSession* session);
         void Inspect(WorldSession* session, uint64 guid);
 
-        uint32 GetPoints(uint32 MemberRating);
         int32  GetMatchmakerRatingMod(uint32 ownRating, uint32 opponentRating, bool won);
         int32  GetRatingMod(uint32 ownRating, uint32 opponentRating, bool won);
         float  GetChanceAgainst(uint32 ownRating, uint32 opponentRating);
@@ -177,8 +180,6 @@ class ArenaTeam
         int32  LostAgainst(uint32 Own_MMRating, uint32 Opponent_MMRating, int32& rating_change);
         void   MemberLost(Player* player, uint32 againstMatchmakerRating, int32 MatchmakerRatingChange = -12);
         void   OfflineMemberLost(uint64 guid, uint32 againstMatchmakerRating, int32 MatchmakerRatingChange = -12);
-
-        void UpdateArenaPointsHelper(std::map<uint32, uint32> & PlayerPoints);
 
         void FinishWeek();
         void FinishGame(int32 mod);

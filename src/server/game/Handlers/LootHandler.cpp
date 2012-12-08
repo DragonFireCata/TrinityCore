@@ -17,21 +17,22 @@
  */
 
 #include "Common.h"
-#include "WorldPacket.h"
 #include "Log.h"
 #include "Corpse.h"
+#include "Creature.h"
 #include "GameObject.h"
-#include "Player.h"
-#include "ObjectAccessor.h"
-#include "WorldSession.h"
-#include "LootMgr.h"
-#include "Object.h"
 #include "Group.h"
-#include "World.h"
-#include "Util.h"
 #include "GuildMgr.h"
+#include "LootMgr.h"
+#include "ObjectAccessor.h"
+#include "Object.h"
+#include "Opcodes.h"
+#include "Player.h"
+#include "World.h"
+#include "WorldPacket.h"
+#include "WorldSession.h"
 
-void WorldSession::HandleAutostoreLootItemOpcode(WorldPacket & recvData)
+void WorldSession::HandleAutostoreLootItemOpcode(WorldPacket& recvData)
 {
     sLog->outDebug(LOG_FILTER_NETWORKIO, "WORLD: CMSG_AUTOSTORE_LOOT_ITEM");
     Player* player = GetPlayer();
@@ -211,7 +212,7 @@ void WorldSession::HandleLootMoneyOpcode(WorldPacket& /*recvData*/)
     }
 }
 
-void WorldSession::HandleLootOpcode(WorldPacket & recvData)
+void WorldSession::HandleLootOpcode(WorldPacket& recvData)
 {
     sLog->outDebug(LOG_FILTER_NETWORKIO, "WORLD: CMSG_LOOT");
 
@@ -509,7 +510,7 @@ void WorldSession::HandleLootMasterGiveOpcode(WorldPacket& recvData)
     Item* newitem = target->StoreNewItem(dest, item.itemid, true, item.randomPropertyId, looters);
     target->SendNewItem(newitem, uint32(item.count), false, false, true);
     target->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_LOOT_ITEM, item.itemid, item.count);
-    target->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_LOOT_TYPE, loot->loot_type, item.count);
+    target->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_LOOT_TYPE, item.itemid, item.count, loot->loot_type);
     target->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_LOOT_EPIC_ITEM, item.itemid, item.count);
 
     // mark as looted

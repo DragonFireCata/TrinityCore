@@ -21,10 +21,10 @@
  * Scriptnames of files in this file should be prefixed with "spell_mage_".
  */
 
+#include "Player.h"
 #include "ScriptMgr.h"
 #include "SpellScript.h"
 #include "SpellAuraEffects.h"
-
 
 enum MageSpells
 {
@@ -39,6 +39,7 @@ enum MageSpells
     SPELL_MAGE_SUMMON_WATER_ELEMENTAL_PERMANENT  = 70908,
     SPELL_MAGE_SUMMON_WATER_ELEMENTAL_TEMPORARY  = 70907,
     SPELL_MAGE_GLYPH_OF_BLAST_WAVE               = 62126,
+    SPELL_MAGE_CONJURE_REFRESHMENT               = 42955,
 };
 
 class spell_mage_blast_wave : public SpellScriptLoader
@@ -380,10 +381,124 @@ class spell_mage_living_bomb : public SpellScriptLoader
         }
 };
 
+enum ConeOfColdSpells
+{
+    SPELL_CONE_OF_COLD_AURA_R1      = 11190, // Improved Cone of Cold Rank 1 aura
+    SPELL_CONE_OF_COLD_AURA_R2      = 12489, // Improved Cone of Cold Rank 2 aura
+    SPELL_CONE_OF_COLD_TRIGGER_R1   = 83301, // Improved Cone of Cold Rank 1 Trigger
+    SPELL_CONE_OF_COLD_TRIGGER_R2   = 83302, // Improved Cone of Cold Rank 2 Trigger
+};
+
+// 120 Cone of Cold
+/// Updated 4.3.4
+class spell_mage_cone_of_cold : public SpellScriptLoader
+{
+public:
+    spell_mage_cone_of_cold() : SpellScriptLoader("spell_mage_cone_of_cold") { }
+
+    class spell_mage_cone_of_cold_SpellScript : public SpellScript
+    {
+        PrepareSpellScript(spell_mage_cone_of_cold_SpellScript);
+
+        void HandleConeOfColdScript(SpellEffIndex /*effIndex*/)
+        {
+            Unit* caster = GetCaster();
+            if (Unit* unitTarget = GetHitUnit())
+            {
+                if (caster->HasAura(SPELL_CONE_OF_COLD_AURA_R1)) // Improved Cone of Cold Rank 1
+                    unitTarget->CastSpell(unitTarget, SPELL_CONE_OF_COLD_TRIGGER_R1, true);
+                else if (caster->HasAura(SPELL_CONE_OF_COLD_AURA_R2)) // Improved Cone of Cold Rank 2
+                        unitTarget->CastSpell(unitTarget, SPELL_CONE_OF_COLD_TRIGGER_R2, true);
+            }
+        }
+
+        void Register()
+        {
+            OnEffectHitTarget += SpellEffectFn(spell_mage_cone_of_cold_SpellScript::HandleConeOfColdScript, EFFECT_0, SPELL_EFFECT_APPLY_AURA);
+        }
+    };
+
+    SpellScript* GetSpellScript() const
+    {
+        return new spell_mage_cone_of_cold_SpellScript();
+    }
+};
+
+struct ConjureRefreshmentData
+{
+    uint32 minLevel;
+    uint32 maxLevel;
+    uint32 spellId;
+};
+
+uint8 const MAX_CONJURE_REFRESHMENT_SPELLS = 7;
+const ConjureRefreshmentData _conjureData[MAX_CONJURE_REFRESHMENT_SPELLS] =
+{
+    { 33, 43, 92739 },
+    { 44, 53, 92799 },
+    { 54, 63, 92802 },
+    { 64, 73, 92805 },
+    { 74, 79, 74625 },
+    { 80, 84, 92822 },
+    { 85, 85, 92727 }
+};
+
+class spell_mage_conjure_refreshment : public SpellScriptLoader
+{
+    public:
+        spell_mage_conjure_refreshment() : SpellScriptLoader("spell_mage_conjure_refreshment") { }
+
+        class spell_mage_conjure_refreshment_SpellScript : public SpellScript
+        {
+            PrepareSpellScript(spell_mage_conjure_refreshment_SpellScript);
+
+            bool Validate(SpellInfo const* /*spellEntry*/)
+            {
+                for (uint8 i = 0; i < MAX_CONJURE_REFRESHMENT_SPELLS; ++i)
+                    if (!sSpellMgr->GetSpellInfo(_conjureData[i].spellId))
+                        return false;
+                return true;
+            }
+
+            bool Load()
+            {
+                if (GetCaster()->GetTypeId() != TYPEID_PLAYER)
+                    return false;
+                return true;
+            }
+
+            void HandleDummy(SpellEffIndex /*effIndex*/)
+            {
+                uint8 level = GetHitUnit()->getLevel();
+                for (uint8 i = 0; i < MAX_CONJURE_REFRESHMENT_SPELLS; ++i)
+                {
+                    ConjureRefreshmentData const& spellData = _conjureData[i];
+                    if (level < spellData.minLevel || level > spellData.maxLevel)
+                        continue;
+                    GetHitUnit()->CastSpell(GetHitUnit(), spellData.spellId);
+                    break;
+                }
+            }
+
+
+            void Register()
+            {
+                OnEffectHitTarget += SpellEffectFn(spell_mage_conjure_refreshment_SpellScript::HandleDummy, EFFECT_0, SPELL_EFFECT_DUMMY);
+            }
+        };
+
+        SpellScript* GetSpellScript() const
+        {
+            return new spell_mage_conjure_refreshment_SpellScript();
+        }
+};
+
 void AddSC_mage_spell_scripts()
 {
     new spell_mage_blast_wave();
     new spell_mage_cold_snap();
+    new spell_mage_cone_of_cold();
+    new spell_mage_conjure_refreshment();
     new spell_mage_frost_warding_trigger();
     new spell_mage_incanters_absorbtion_absorb();
     new spell_mage_incanters_absorbtion_manashield();

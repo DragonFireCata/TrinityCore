@@ -93,7 +93,7 @@ enum Races
 
 #define RACEMASK_ALLIANCE \
     ((1<<(RACE_HUMAN-1)) | (1<<(RACE_DWARF-1)) | (1<<(RACE_NIGHTELF-1)) | \
-    (1<<(RACE_GNOME-1)) | (1<<(RACE_DRAENEI-1)) | (1<<(RACE_WORGEN-1)))
+     (1<<(RACE_GNOME-1)) | (1<<(RACE_DRAENEI-1)) | (1<<(RACE_WORGEN-1)))
 
 #define RACEMASK_HORDE RACEMASK_ALL_PLAYABLE & ~RACEMASK_ALLIANCE
 
@@ -534,7 +534,7 @@ enum SpellAttr7
     SPELL_ATTR7_REACTIVATE_AT_RESURRECT          = 0x00000004, //  2 Paladin's auras and 65607 only.
     SPELL_ATTR7_IS_CHEAT_SPELL                   = 0x00000008, //  3 Cannot cast if caster doesn't have UnitFlag2 & UNIT_FLAG2_ALLOW_CHEAT_SPELLS
     SPELL_ATTR7_UNK4                             = 0x00000010, //  4 Only 47883 (Soulstone Resurrection) and test spell.
-    SPELL_ATTR7_SUMMON_PLAYER_TOTEM              = 0x00000020, //  5 Only Shaman player totems.
+    SPELL_ATTR7_SUMMON_TOTEM                     = 0x00000020, //  5 Only Shaman totems.
     SPELL_ATTR7_UNK6                             = 0x00000040, //  6 Dark Surge, Surge of Light, Burning Breath triggers (boss spells).
     SPELL_ATTR7_UNK7                             = 0x00000080, //  7 66218 (Launch) spell.
     SPELL_ATTR7_HORDE_ONLY                       = 0x00000100, //  8 Teleports, mounts and other spells.
@@ -565,56 +565,56 @@ enum SpellAttr7
 
 enum SpellAttr8
 {
-    SPELL_ATTR8_UNK0                             = 0x00000001, // 0
-    SPELL_ATTR8_UNK1                             = 0x00000002, // 1
-    SPELL_ATTR8_UNK2                             = 0x00000004, // 2
-    SPELL_ATTR8_UNK3                             = 0x00000008, // 3
-    SPELL_ATTR8_UNK4                             = 0x00000010, // 4
-    SPELL_ATTR8_UNK5                             = 0x00000020, // 5
-    SPELL_ATTR8_UNK6                             = 0x00000040, // 6
-    SPELL_ATTR8_UNK7                             = 0x00000080, // 7
-    SPELL_ATTR8_UNK8                             = 0x00000100, // 8
-    SPELL_ATTR8_DONT_RESET_PERIODIC_TIMER        = 0x00000200, // 9 Periodic auras with this flag keep old periodic timer when refreshing at close to one tick remaining (kind of anti DoT clipping)
-    SPELL_ATTR8_UNK10                            = 0x00000400, // 10
+    SPELL_ATTR8_CANT_MISS                        = 0x00000001, //  0
+    SPELL_ATTR8_UNK1                             = 0x00000002, //  1
+    SPELL_ATTR8_UNK2                             = 0x00000004, //  2
+    SPELL_ATTR8_UNK3                             = 0x00000008, //  3
+    SPELL_ATTR8_UNK4                             = 0x00000010, //  4
+    SPELL_ATTR8_UNK5                             = 0x00000020, //  5
+    SPELL_ATTR8_UNK6                             = 0x00000040, //  6
+    SPELL_ATTR8_UNK7                             = 0x00000080, //  7
+    SPELL_ATTR8_AFFECT_PARTY_AND_RAID            = 0x00000100, //  8 Nearly all spells have "all party and raid" in description
+    SPELL_ATTR8_DONT_RESET_PERIODIC_TIMER        = 0x00000200, //  9 Periodic auras with this flag keep old periodic timer when refreshing at close to one tick remaining (kind of anti DoT clipping)
+    SPELL_ATTR8_NAME_CHANGED_DURING_TRANSFORM    = 0x00000400, // 10 according to wowhead comments, name changes, title remains
     SPELL_ATTR8_UNK11                            = 0x00000800, // 11
     SPELL_ATTR8_AURA_SEND_AMOUNT                 = 0x00001000, // 12 Aura must have flag AFLAG_ANY_EFFECT_AMOUNT_SENT to send amount
     SPELL_ATTR8_UNK13                            = 0x00002000, // 13
     SPELL_ATTR8_UNK14                            = 0x00004000, // 14
-    SPELL_ATTR8_UNK15                            = 0x00008000, // 15
+    SPELL_ATTR8_WATER_MOUNT                      = 0x00008000, // 15 only one River Boat used in Thousand Needles
     SPELL_ATTR8_UNK16                            = 0x00010000, // 16
     SPELL_ATTR8_UNK17                            = 0x00020000, // 17
-    SPELL_ATTR8_UNK18                            = 0x00040000, // 18
-    SPELL_ATTR8_UNK19                            = 0x00080000, // 19
+    SPELL_ATTR8_REMEMBER_SPELLS                  = 0x00040000, // 18 at some point in time, these auras remember spells and allow to cast them later
+    SPELL_ATTR8_USE_COMBO_POINTS_ON_ANY_TARGET   = 0x00080000, // 19 allows to consume combo points from dead targets
     SPELL_ATTR8_ARMOR_SPECIALIZATION             = 0x00100000, // 20
     SPELL_ATTR8_UNK21                            = 0x00200000, // 21
     SPELL_ATTR8_UNK22                            = 0x00400000, // 22
     SPELL_ATTR8_UNK23                            = 0x00800000, // 23
-    SPELL_ATTR8_UNK24                            = 0x01000000, // 24
+    SPELL_ATTR8_HEALING_SPELL                    = 0x01000000, // 24
     SPELL_ATTR8_UNK25                            = 0x02000000, // 25
     SPELL_ATTR8_RAID_MARKER                      = 0x04000000, // 26 probably spell no need learn to cast
     SPELL_ATTR8_UNK27                            = 0x08000000, // 27
-    SPELL_ATTR8_GUILD_PERKS                      = 0x10000000, // 28
-    SPELL_ATTR8_MASTERY                          = 0x20000000, // 29
+    SPELL_ATTR8_NOT_IN_BG_OR_ARENA               = 0x10000000, // 28 not allow to cast or deactivate currently active effect, not sure about Fast Track
+    SPELL_ATTR8_MASTERY_SPECIALIZATION           = 0x20000000, // 29
     SPELL_ATTR8_UNK30                            = 0x40000000, // 30
     SPELL_ATTR8_UNK31                            = 0x80000000  // 31
 };
 
 enum SpellAttr9
 {
-    SPELL_ATTR9_UNK0                             = 0x00000001, // 0
-    SPELL_ATTR9_UNK1                             = 0x00000002, // 1
-    SPELL_ATTR9_UNK2                             = 0x00000004, // 2
-    SPELL_ATTR9_UNK3                             = 0x00000008, // 3
-    SPELL_ATTR9_UNK4                             = 0x00000010, // 4
-    SPELL_ATTR9_UNK5                             = 0x00000020, // 5
-    SPELL_ATTR9_UNK6                             = 0x00000040, // 6
-    SPELL_ATTR9_UNK7                             = 0x00000080, // 7
-    SPELL_ATTR9_UNK8                             = 0x00000100, // 8
-    SPELL_ATTR9_NOT_USABLE_IN_ARENA              = 0x00000200, // 9 Cannot be used in arenas
+    SPELL_ATTR9_UNK0                             = 0x00000001, //  0
+    SPELL_ATTR9_UNK1                             = 0x00000002, //  1
+    SPELL_ATTR9_RESTRICTED_FLIGHT_AREA           = 0x00000004, //  2 Dalaran and Wintergrasp flight area auras have it
+    SPELL_ATTR9_UNK3                             = 0x00000008, //  3
+    SPELL_ATTR9_SPECIAL_DELAY_CALCULATION        = 0x00000010, //  4
+    SPELL_ATTR9_SUMMON_PLAYER_TOTEM              = 0x00000020, //  5
+    SPELL_ATTR9_UNK6                             = 0x00000040, //  6
+    SPELL_ATTR9_UNK7                             = 0x00000080, //  7
+    SPELL_ATTR9_AIMED_SHOT                       = 0x00000100, //  8
+    SPELL_ATTR9_NOT_USABLE_IN_ARENA              = 0x00000200, //  9 Cannot be used in arenas
     SPELL_ATTR9_UNK10                            = 0x00000400, // 10
     SPELL_ATTR9_UNK11                            = 0x00000800, // 11
     SPELL_ATTR9_UNK12                            = 0x00001000, // 12
-    SPELL_ATTR9_UNK13                            = 0x00002000, // 13
+    SPELL_ATTR9_SLAM                             = 0x00002000, // 13
     SPELL_ATTR9_USABLE_IN_RATED_BATTLEGROUNDS    = 0x00004000, // 14 Can be used in Rated Battlegrounds
     SPELL_ATTR9_UNK15                            = 0x00008000, // 15
     SPELL_ATTR9_UNK16                            = 0x00010000, // 16
@@ -637,18 +637,18 @@ enum SpellAttr9
 
 enum SpellAttr10
 {
-    SPELL_ATTR10_UNK0                             = 0x00000001, // 0
-    SPELL_ATTR10_UNK1                             = 0x00000002, // 1
-    SPELL_ATTR10_UNK2                             = 0x00000004, // 2
-    SPELL_ATTR10_UNK3                             = 0x00000008, // 3
-    SPELL_ATTR10_UNK4                             = 0x00000010, // 4
-    SPELL_ATTR10_UNK5                             = 0x00000020, // 5
-    SPELL_ATTR10_UNK6                             = 0x00000040, // 6
-    SPELL_ATTR10_UNK7                             = 0x00000080, // 7
-    SPELL_ATTR10_UNK8                             = 0x00000100, // 8
-    SPELL_ATTR10_UNK9                             = 0x00000200, // 9
+    SPELL_ATTR10_UNK0                             = 0x00000001, //  0
+    SPELL_ATTR10_UNK1                             = 0x00000002, //  1
+    SPELL_ATTR10_UNK2                             = 0x00000004, //  2
+    SPELL_ATTR10_UNK3                             = 0x00000008, //  3
+    SPELL_ATTR10_WATER_SPOUT                      = 0x00000010, //  4
+    SPELL_ATTR10_UNK5                             = 0x00000020, //  5
+    SPELL_ATTR10_UNK6                             = 0x00000040, //  6
+    SPELL_ATTR10_TELEPORT_PLAYER                  = 0x00000080, //  7 4 Teleport Player spells
+    SPELL_ATTR10_UNK8                             = 0x00000100, //  8
+    SPELL_ATTR10_UNK9                             = 0x00000200, //  9
     SPELL_ATTR10_UNK10                            = 0x00000400, // 10
-    SPELL_ATTR10_UNK11                            = 0x00000800, // 11
+    SPELL_ATTR10_HERB_GATHERING_MINING            = 0x00000800, // 11 Only Herb Gathering and Mining
     SPELL_ATTR10_UNK12                            = 0x00001000, // 12
     SPELL_ATTR10_UNK13                            = 0x00002000, // 13
     SPELL_ATTR10_UNK14                            = 0x00004000, // 14
@@ -3355,8 +3355,12 @@ enum PetDiet
 
 #define CHAIN_SPELL_JUMP_RADIUS 8
 
-#define GUILD_BANKLOG_MAX_RECORDS   25
-#define GUILD_EVENTLOG_MAX_RECORDS  100
+enum GuildLogs
+{
+    GUILD_BANKLOG_MAX_RECORDS   = 25,
+    GUILD_EVENTLOG_MAX_RECORDS  = 100,
+    GUILD_NEWSLOG_MAX_RECORDS   = 250
+};
 
 enum AiReaction
 {
@@ -3432,7 +3436,8 @@ enum SummonType
 
 enum EventId
 {
-    EVENT_CHARGE            = 1003
+    EVENT_CHARGE            = 1003,
+    EVENT_JUMP              = 1004
 };
 
 enum ResponseCodes
@@ -3573,25 +3578,25 @@ enum BanReturn
 // indexes of BattlemasterList.dbc
 enum BattlegroundTypeId
 {
-    BATTLEGROUND_TYPE_NONE          = 0, // None
-    BATTLEGROUND_AV                 = 1, // Alterac Valley
-    BATTLEGROUND_WS                 = 2, // Warsong Gulch
-    BATTLEGROUND_AB                 = 3, // Arathi Basin
-    BATTLEGROUND_NA                 = 4, // Nagrand Arena
-    BATTLEGROUND_BE                 = 5, // Blade's Edge Arena
-    BATTLEGROUND_AA                 = 6, // All Arenas
-    BATTLEGROUND_EY                 = 7, // Eye of the Storm
-    BATTLEGROUND_RL                 = 8, // Ruins of Lordaernon
-    BATTLEGROUND_SA                 = 9, // Strand of the Ancients
-    BATTLEGROUND_DS                 = 10, // Dalaran Sewers
-    BATTLEGROUND_RV                 = 11, // Ring of Valor
-    BATTLEGROUND_IC                 = 30, // Isle of Conquest
-    BATTLEGROUND_RB                 = 32, // Random Battleground
-    BATTLEGROUND_RATED_10_VS_10     = 100, // Rated BG 10 vs 10
-    BATTLEGROUND_RATED_15_VS_15     = 101, // Rated BG 15 vs 15
-    BATTLEGROUND_RATED_25_VS_25     = 102, // Rated BG 25 vs 25
-    BATTLEGROUND_TP                 = 108, // Twin Peaks
-    BATTLEGROUND_BFG                = 120, // Battle For Gilneas
+    BATTLEGROUND_TYPE_NONE      = 0, // None
+    BATTLEGROUND_AV             = 1, // Alterac Valley
+    BATTLEGROUND_WS             = 2, // Warsong Gulch
+    BATTLEGROUND_AB             = 3, // Arathi Basin
+    BATTLEGROUND_NA             = 4, // Nagrand Arena
+    BATTLEGROUND_BE             = 5, // Blade's Edge Arena
+    BATTLEGROUND_AA             = 6, // All Arenas
+    BATTLEGROUND_EY             = 7, // Eye of the Storm
+    BATTLEGROUND_RL             = 8, // Ruins of Lordaernon
+    BATTLEGROUND_SA             = 9, // Strand of the Ancients
+    BATTLEGROUND_DS             = 10, // Dalaran Sewers
+    BATTLEGROUND_RV             = 11, // Ring of Valor
+    BATTLEGROUND_IC             = 30, // Isle of Conquest
+    BATTLEGROUND_RB             = 32, // Random Battleground
+    BATTLEGROUND_RATED_10_VS_10 = 100, // Rated BG 10 vs 10
+    BATTLEGROUND_RATED_15_VS_15 = 101, // Rated BG 15 vs 15
+    BATTLEGROUND_RATED_25_VS_25 = 102, // Rated BG 25 vs 25
+    BATTLEGROUND_TP             = 108, // Twin Peaks
+    BATTLEGROUND_BFG            = 120, // Battle For Gilneas
     // 441 = "Icecrown Citadel"
     // 443 = "The Ruby Sanctum"
     // 656 = "Rated Eye of the Storm"
@@ -3720,106 +3725,98 @@ enum ActivateTaxiReply
     ERR_TAXINOTSTANDING             = 12
 };
 
-// Calendar - start
-
-enum CalendarFlags
+enum ProfessionUI
 {
-    CALENDAR_FLAG_ALL_ALLOWED     = 0x001,
-    CALENDAR_FLAG_INVITES_LOCKED  = 0x010,
-    CALENDAR_FLAG_WITHOUT_INVITES = 0x040,
-    CALENDAR_FLAG_GUILD_ONLY      = 0x400
+    MAX_PRIMARY_PROFESSIONS = 2,
+    MAX_SECONDARY_SKILLS = 5
 };
 
-enum CalendarActionData
+enum DuelCompleteType
 {
-    CALENDAR_ACTION_NONE,
-    CALENDAR_ACTION_ADD_EVENT,
-    CALENDAR_ACTION_MODIFY_EVENT,
-    CALENDAR_ACTION_REMOVE_EVENT,
-    CALENDAR_ACTION_COPY_EVENT,
-    CALENDAR_ACTION_ADD_EVENT_INVITE,
-    CALENDAR_ACTION_MODIFY_EVENT_INVITE,
-    CALENDAR_ACTION_MODIFY_MODERATOR_EVENT_INVITE,
-    CALENDAR_ACTION_REMOVE_EVENT_INVITE,
-    CALENDAR_ACTION_SIGNUP_TO_EVENT
+    DUEL_INTERRUPTED = 0,
+    DUEL_WON         = 1,
+    DUEL_FLED        = 2
+};
+// handle the queue types and bg types separately to enable joining queue for different sized arenas at the same time
+enum BattlegroundQueueTypeId
+{
+    BATTLEGROUND_QUEUE_NONE     = 0,
+    BATTLEGROUND_QUEUE_AV       = 1,
+    BATTLEGROUND_QUEUE_WS       = 2,
+    BATTLEGROUND_QUEUE_AB       = 3,
+    BATTLEGROUND_QUEUE_EY       = 4,
+    BATTLEGROUND_QUEUE_SA       = 5,
+    BATTLEGROUND_QUEUE_IC       = 6,
+    BATTLEGROUND_QUEUE_TP       = 7,
+    BATTLEGROUND_QUEUE_BFG      = 8,
+    BATTLEGROUND_QUEUE_RB       = 9,
+    BATTLEGROUND_QUEUE_2v2      = 10,
+    BATTLEGROUND_QUEUE_3v3      = 11,
+    BATTLEGROUND_QUEUE_5v5      = 12,
+    MAX_BATTLEGROUND_QUEUE_TYPES
 };
 
-enum CalendarModerationRank
+enum GroupJoinBattlegroundResult
 {
-    CALENDAR_RANK_PLAYER,
-    CALENDAR_RANK_MODERATOR,
-    CALENDAR_RANK_OWNER
+    ERR_BATTLEGROUND_NONE                           = 0,
+    ERR_GROUP_JOIN_BATTLEGROUND_DESERTERS           = 2,        // You cannot join the battleground yet because you or one of your party members is flagged as a Deserter.
+    ERR_ARENA_TEAM_PARTY_SIZE                       = 3,        // Incorrect party size for this arena.
+    ERR_BATTLEGROUND_TOO_MANY_QUEUES                = 4,        // You can only be queued for 2 battles at once
+    ERR_BATTLEGROUND_CANNOT_QUEUE_FOR_RATED         = 5,        // You cannot queue for a rated match while queued for other battles
+    ERR_BATTLEDGROUND_QUEUED_FOR_RATED              = 6,        // You cannot queue for another battle while queued for a rated arena match
+    ERR_BATTLEGROUND_TEAM_LEFT_QUEUE                = 7,        // Your team has left the arena queue
+    ERR_BATTLEGROUND_NOT_IN_BATTLEGROUND            = 8,        // You can't do that in a battleground.
+    ERR_BATTLEGROUND_JOIN_XP_GAIN                   = 9,        // wtf, doesn't exist in client...
+    ERR_BATTLEGROUND_JOIN_RANGE_INDEX               = 10,       // Cannot join the queue unless all members of your party are in the same battleground level range.
+    ERR_BATTLEGROUND_JOIN_TIMED_OUT                 = 11,       // %s was unavailable to join the queue. (uint64 guid exist in client cache)
+    //ERR_BATTLEGROUND_JOIN_TIMED_OUT               = 12,       // same as 11
+    //ERR_BATTLEGROUND_TEAM_LEFT_QUEUE              = 13,       // same as 7
+    ERR_LFG_CANT_USE_BATTLEGROUND                   = 14,       // You cannot queue for a battleground or arena while using the dungeon system.
+    ERR_IN_RANDOM_BG                                = 15,       // Can't do that while in a Random Battleground queue.
+    ERR_IN_NON_RANDOM_BG                            = 16,       // Can't queue for Random Battleground while in another Battleground queue.
+    ERR_BG_DEVELOPER_ONLY                           = 17,
+    ERR_BATTLEGROUND_INVITATION_DECLINED            = 18,
+    ERR_MEETING_STONE_NOT_FOUND                     = 19,
+    ERR_WARGAME_REQUEST_FAILURE                     = 20,
+    ERR_BATTLEFIELD_TEAM_PARTY_SIZE                 = 22,
+    ERR_NOT_ON_TOURNAMENT_REALM                     = 23,
+    ERR_BATTLEGROUND_PLAYERS_FROM_DIFFERENT_REALMS  = 24,
+    ERR_REMOVE_FROM_PVP_QUEUE_GRANT_LEVEL           = 33,
+    ERR_REMOVE_FROM_PVP_QUEUE_FACTION_CHANGE        = 34,
+    ERR_BATTLEGROUND_JOIN_FAILED                    = 35,
+    ERR_BATTLEGROUND_DUPE_QUEUE                     = 43
 };
 
-enum CalendarSendEventType
+enum PetNameInvalidReason
 {
-    CALENDAR_SENDTYPE_GET,
-    CALENDAR_SENDTYPE_ADD,
-    CALENDAR_SENDTYPE_COPY
+    // custom, not send
+    PET_NAME_SUCCESS                                        = 0,
+
+    PET_NAME_INVALID                                        = 1,
+    PET_NAME_NO_NAME                                        = 2,
+    PET_NAME_TOO_SHORT                                      = 3,
+    PET_NAME_TOO_LONG                                       = 4,
+    PET_NAME_MIXED_LANGUAGES                                = 6,
+    PET_NAME_PROFANE                                        = 7,
+    PET_NAME_RESERVED                                       = 8,
+    PET_NAME_THREE_CONSECUTIVE                              = 11,
+    PET_NAME_INVALID_SPACE                                  = 12,
+    PET_NAME_CONSECUTIVE_SPACES                             = 13,
+    PET_NAME_RUSSIAN_CONSECUTIVE_SILENT_CHARACTERS          = 14,
+    PET_NAME_RUSSIAN_SILENT_CHARACTER_AT_BEGINNING_OR_END   = 15,
+    PET_NAME_DECLENSION_DOESNT_MATCH_BASE_NAME              = 16
 };
 
-enum CalendarEventType
+enum DungeonStatusFlag
 {
-    CALENDAR_TYPE_RAID,
-    CALENDAR_TYPE_DUNGEON,
-    CALENDAR_TYPE_PVP,
-    CALENDAR_TYPE_MEETING,
-    CALENDAR_TYPE_OTHER
+    DUNGEON_STATUSFLAG_NORMAL = 0x01,
+    DUNGEON_STATUSFLAG_HEROIC = 0x02,
+
+    RAID_STATUSFLAG_10MAN_NORMAL = 0x01,
+    RAID_STATUSFLAG_25MAN_NORMAL = 0x02,
+    RAID_STATUSFLAG_10MAN_HEROIC = 0x04,
+    RAID_STATUSFLAG_25MAN_HEROIC = 0x08
 };
-
-enum CalendarInviteStatus
-{
-    CALENDAR_STATUS_INVITED,
-    CALENDAR_STATUS_ACCEPTED,
-    CALENDAR_STATUS_DECLINED,
-    CALENDAR_STATUS_TENTATIVE,
-    CALENDAR_STATUS_OUT,
-    CALENDAR_STATUS_STANDBY,
-    CALENDAR_STATUS_CONFIRMED,
-    CALENDAR_STATUS_NO_OWNER,
-    CALENDAR_STATUS_8,
-    CALENDAR_STATUS_9
-};
-
-enum CalendarError
-{
-    CALENDAR_OK                                 = 0,
-    CALENDAR_ERROR_GUILD_EVENTS_EXCEEDED        = 1,
-    CALENDAR_ERROR_EVENTS_EXCEEDED              = 2,
-    CALENDAR_ERROR_SELF_INVITES_EXCEEDED        = 3,
-    CALENDAR_ERROR_OTHER_INVITES_EXCEEDED       = 4,
-    CALENDAR_ERROR_PERMISSIONS                  = 5,
-    CALENDAR_ERROR_EVENT_INVALID                = 6,
-    CALENDAR_ERROR_NOT_INVITED                  = 7,
-    CALENDAR_ERROR_INTERNAL                     = 8,
-    CALENDAR_ERROR_GUILD_PLAYER_NOT_IN_GUILD    = 9,
-    CALENDAR_ERROR_ALREADY_INVITED_TO_EVENT_S   = 10,
-    CALENDAR_ERROR_PLAYER_NOT_FOUND             = 11,
-    CALENDAR_ERROR_NOT_ALLIED                   = 12,
-    CALENDAR_ERROR_IGNORING_YOU_S               = 13,
-    CALENDAR_ERROR_INVITES_EXCEEDED             = 14,
-    CALENDAR_ERROR_INVALID_DATE                 = 16,
-    CALENDAR_ERROR_INVALID_TIME                 = 17,
-
-    CALENDAR_ERROR_NEEDS_TITLE                  = 19,
-    CALENDAR_ERROR_EVENT_PASSED                 = 20,
-    CALENDAR_ERROR_EVENT_LOCKED                 = 21,
-    CALENDAR_ERROR_DELETE_CREATOR_FAILED        = 22,
-    CALENDAR_ERROR_SYSTEM_DISABLED              = 24,
-    CALENDAR_ERROR_RESTRICTED_ACCOUNT           = 25,
-    CALENDAR_ERROR_ARENA_EVENTS_EXCEEDED        = 26,
-    CALENDAR_ERROR_RESTRICTED_LEVEL             = 27,
-    CALENDAR_ERROR_USER_SQUELCHED               = 28,
-    CALENDAR_ERROR_NO_INVITE                    = 29,
-
-    CALENDAR_ERROR_EVENT_WRONG_SERVER           = 36,
-    CALENDAR_ERROR_INVITE_WRONG_SERVER          = 37,
-    CALENDAR_ERROR_NO_GUILD_INVITES             = 38,
-    CALENDAR_ERROR_INVALID_SIGNUP               = 39,
-    CALENDAR_ERROR_NO_MODERATOR                 = 40
-};
-
-// Calendar - end
 
 #define VOID_STORAGE_UNLOCK       100*GOLD
 #define VOID_STORAGE_STORE_ITEM   25*GOLD
@@ -3839,6 +3836,41 @@ enum VoidTransferError
     VOID_TRANSFER_ERROR_INVENTORY_FULL    = 7,
     VOID_TRANSFER_ERROR_INTERNAL_ERROR_5  = 8,
     VOID_TRANSFER_ERROR_TRANSFER_UNKNOWN  = 9,
+};
+
+#define CURRENCY_PRECISION 100
+
+enum PartyResult
+{
+    ERR_PARTY_RESULT_OK                 = 0,
+    ERR_BAD_PLAYER_NAME_S               = 1,
+    ERR_TARGET_NOT_IN_GROUP_S           = 2,
+    ERR_TARGET_NOT_IN_INSTANCE_S        = 3,
+    ERR_GROUP_FULL                      = 4,
+    ERR_ALREADY_IN_GROUP_S              = 5,
+    ERR_NOT_IN_GROUP                    = 6,
+    ERR_NOT_LEADER                      = 7,
+    ERR_PLAYER_WRONG_FACTION            = 8,
+    ERR_IGNORING_YOU_S                  = 9,
+    ERR_LFG_PENDING                     = 12,
+    ERR_INVITE_RESTRICTED               = 13,
+    ERR_GROUP_SWAP_FAILED               = 14,               // if (PartyOperation == PARTY_OP_SWAP) ERR_GROUP_SWAP_FAILED else ERR_INVITE_IN_COMBAT
+    ERR_INVITE_UNKNOWN_REALM            = 15,
+    ERR_INVITE_NO_PARTY_SERVER          = 16,
+    ERR_INVITE_PARTY_BUSY               = 17,
+    ERR_PARTY_TARGET_AMBIGUOUS          = 18,
+    ERR_PARTY_LFG_INVITE_RAID_LOCKED    = 19,
+    ERR_PARTY_LFG_BOOT_LIMIT            = 20,
+    ERR_PARTY_LFG_BOOT_COOLDOWN_S       = 21,
+    ERR_PARTY_LFG_BOOT_IN_PROGRESS      = 22,
+    ERR_PARTY_LFG_BOOT_TOO_FEW_PLAYERS  = 23,
+    ERR_PARTY_LFG_BOOT_NOT_ELIGIBLE_S   = 24,
+    ERR_RAID_DISALLOWED_BY_LEVEL        = 25,
+    ERR_PARTY_LFG_BOOT_IN_COMBAT        = 26,
+    ERR_VOTE_KICK_REASON_NEEDED         = 27,
+    ERR_PARTY_LFG_BOOT_DUNGEON_COMPLETE = 28,
+    ERR_PARTY_LFG_BOOT_LOOT_ROLLS       = 29,
+    ERR_PARTY_LFG_TELEPORT_IN_COMBAT    = 30
 };
 
 #endif

@@ -16,21 +16,6 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-/* ScriptData
-SDName: Stonetalon_Mountains
-SD%Complete: 0
-SDComment: Quest support:
-SDCategory: Stonetalon Mountains
-EndScriptData */
-
-/* ContentData
-EndContentData */
-
-#include "ScriptMgr.h"
-#include "ScriptedCreature.h"
-#include "ScriptedGossip.h"
-#include "ScriptedEscortAI.h"
-
 void AddSC_stonetalon_mountains()
 {
 }

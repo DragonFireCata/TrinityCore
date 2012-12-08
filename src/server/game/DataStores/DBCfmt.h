@@ -49,7 +49,7 @@ char const CreatureModelDatafmt[]="nxxxxxxxxxxxxxffxxxxxxxxxxxxxxx";
 char const CreatureFamilyfmt[]="nfifiiiiixsx";
 char const CreatureSpellDatafmt[]="niiiixxxx";
 char const CreatureTypefmt[]="nxx";
-char const CurrencyTypesfmt[]="nxxxxxiiiix";
+char const CurrencyTypesfmt[]="nixxxxiiiix";
 
 char const DestructibleModelDatafmt[]="ixxixxxixxxixxxixxxxxxxx";
 char const DungeonEncounterfmt[]="iiixisxx";
@@ -135,7 +135,7 @@ const std::string CustomSpellEntryIndex = "Id";
 char const SpellFocusObjectfmt[]="nx";
 char const SpellItemEnchantmentfmt[]="nxiiiiiixxxiiisiiiiiiix";
 char const SpellItemEnchantmentConditionfmt[]="nbbbbbxxxxxbbbbbbbbbbiiiiiXXXXX";
-char const SpellRadiusfmt[]="nfxf";
+char const SpellRadiusfmt[]="nfff";
 char const SpellRangefmt[]="nffffixx";
 char const SpellReagentsEntryfmt[]="diiiiiiiiiiiiiiii";
 char const SpellScalingEntryfmt[]="diiiiffffffffffi";

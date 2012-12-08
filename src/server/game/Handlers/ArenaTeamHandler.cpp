@@ -27,8 +27,9 @@
 #include "ObjectMgr.h"
 #include "SocialMgr.h"
 #include "ArenaTeamMgr.h"
+#include "Opcodes.h"
 
-void WorldSession::HandleInspectArenaTeamsOpcode(WorldPacket & recvData)
+void WorldSession::HandleInspectArenaTeamsOpcode(WorldPacket& recvData)
 {
     sLog->outDebug(LOG_FILTER_NETWORKIO, "MSG_INSPECT_ARENA_TEAMS");
 
@@ -49,7 +50,7 @@ void WorldSession::HandleInspectArenaTeamsOpcode(WorldPacket & recvData)
     }
 }
 
-void WorldSession::HandleArenaTeamQueryOpcode(WorldPacket & recvData)
+void WorldSession::HandleArenaTeamQueryOpcode(WorldPacket& recvData)
 {
     sLog->outDebug(LOG_FILTER_NETWORKIO, "WORLD: Received CMSG_ARENA_TEAM_QUERY");
 
@@ -63,7 +64,7 @@ void WorldSession::HandleArenaTeamQueryOpcode(WorldPacket & recvData)
     }
 }
 
-void WorldSession::HandleArenaTeamRosterOpcode(WorldPacket & recvData)
+void WorldSession::HandleArenaTeamRosterOpcode(WorldPacket& recvData)
 {
     sLog->outDebug(LOG_FILTER_NETWORKIO, "WORLD: Received CMSG_ARENA_TEAM_ROSTER");
 
@@ -74,7 +75,55 @@ void WorldSession::HandleArenaTeamRosterOpcode(WorldPacket & recvData)
         arenaTeam->Roster(this);
 }
 
-void WorldSession::HandleArenaTeamInviteOpcode(WorldPacket & recvData)
+void WorldSession::HandleArenaTeamCreateOpcode(WorldPacket & recvData)
+{
+    sLog->outDebug(LOG_FILTER_NETWORKIO, "WORLD: Received CMSG_ARENA_TEAM_CREATE");
+
+    uint32 slot, icon, iconcolor, border, bordercolor, background;
+    std::string name;
+
+    recvData >> slot;
+    recvData >> iconcolor;
+    recvData >> bordercolor;
+    recvData >> icon;
+    recvData >> background;
+    recvData >> border;
+    name = recvData.ReadString(recvData.ReadBits(8));
+
+    uint8 type = ArenaTeam::GetTypeBySlot(slot);
+
+    if (_player->GetArenaTeamId(slot))
+    {
+        SendArenaTeamCommandResult(ERR_ARENA_TEAM_INVITE_SS, "", _player->GetName(), ERR_ALREADY_IN_ARENA_TEAM_S);
+        return;
+    }
+
+    if (sObjectMgr->IsReservedName(name) || !ObjectMgr::IsValidCharterName(name))
+    {
+        SendArenaTeamCommandResult(ERR_ARENA_TEAM_CREATE_S, name, "", ERR_ARENA_TEAM_NAME_INVALID);
+        return;
+    }
+
+    if (sArenaTeamMgr->GetArenaTeamByName(name))
+    {
+        SendArenaTeamCommandResult(ERR_ARENA_TEAM_CREATE_S, name, "", ERR_ARENA_TEAM_NAME_EXISTS_S);
+        return;
+    }
+
+    ArenaTeam* arenaTeam = new ArenaTeam;
+    if (!arenaTeam->Create(GUID_LOPART(_player->GetGUID()), type, name, background, icon, iconcolor, border, bordercolor))
+    {
+        sLog->outError(LOG_FILTER_ARENAS, "Arena team create failed.");
+        delete arenaTeam;
+        return;
+    }
+
+    sArenaTeamMgr->AddArenaTeam(arenaTeam);
+
+    SendArenaTeamCommandResult(ERR_ARENA_TEAM_CREATE_S, name, "", ERR_ARENA_TEAM_CREATED);
+}
+
+void WorldSession::HandleArenaTeamInviteOpcode(WorldPacket& recvData)
 {
     sLog->outDebug(LOG_FILTER_NETWORKIO, "CMSG_ARENA_TEAM_INVITE");
 
@@ -109,6 +158,12 @@ void WorldSession::HandleArenaTeamInviteOpcode(WorldPacket & recvData)
     if (!arenaTeam)
     {
         SendArenaTeamCommandResult(ERR_ARENA_TEAM_CREATE_S, "", "", ERR_ARENA_TEAM_PLAYER_NOT_IN_TEAM);
+        return;
+    }
+
+    if (arenaTeam->GetCaptain() != _player->GetGUID())
+    {
+        SendArenaTeamCommandResult(ERR_ARENA_TEAM_CREATE_S, "", "", ERR_ARENA_TEAM_PERMISSIONS);
         return;
     }
 
@@ -193,7 +248,7 @@ void WorldSession::HandleArenaTeamDeclineOpcode(WorldPacket & /*recvData*/)
     _player->SetArenaTeamIdInvited(0);
 }
 
-void WorldSession::HandleArenaTeamLeaveOpcode(WorldPacket & recvData)
+void WorldSession::HandleArenaTeamLeaveOpcode(WorldPacket& recvData)
 {
     sLog->outDebug(LOG_FILTER_NETWORKIO, "CMSG_ARENA_TEAM_LEAVE");
 
@@ -235,7 +290,7 @@ void WorldSession::HandleArenaTeamLeaveOpcode(WorldPacket & recvData)
     SendArenaTeamCommandResult(ERR_ARENA_TEAM_QUIT_S, arenaTeam->GetName(), "", 0);
 }
 
-void WorldSession::HandleArenaTeamDisbandOpcode(WorldPacket & recvData)
+void WorldSession::HandleArenaTeamDisbandOpcode(WorldPacket& recvData)
 {
     sLog->outDebug(LOG_FILTER_NETWORKIO, "CMSG_ARENA_TEAM_DISBAND");
 
@@ -257,7 +312,7 @@ void WorldSession::HandleArenaTeamDisbandOpcode(WorldPacket & recvData)
     }
 }
 
-void WorldSession::HandleArenaTeamRemoveOpcode(WorldPacket & recvData)
+void WorldSession::HandleArenaTeamRemoveOpcode(WorldPacket& recvData)
 {
     sLog->outDebug(LOG_FILTER_NETWORKIO, "CMSG_ARENA_TEAM_REMOVE");
 
@@ -303,7 +358,7 @@ void WorldSession::HandleArenaTeamRemoveOpcode(WorldPacket & recvData)
     arenaTeam->BroadcastEvent(ERR_ARENA_TEAM_REMOVE_SSS, 0, 3, name, arenaTeam->GetName(), _player->GetName());
 }
 
-void WorldSession::HandleArenaTeamLeaderOpcode(WorldPacket & recvData)
+void WorldSession::HandleArenaTeamLeaderOpcode(WorldPacket& recvData)
 {
     sLog->outDebug(LOG_FILTER_NETWORKIO, "CMSG_ARENA_TEAM_LEADER");
 

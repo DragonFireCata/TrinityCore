@@ -339,8 +339,6 @@ public:
                             me->GetMotionMaster()->MoveLand(0, pos);
                             me->SetDisableGravity(false, true);
                             me->SetHover(true);
-                            me->SetDisableGravity(false, true);
-                            me->SetHover(true);
                             ++introPhase;
                             introTimer = 3000;
                             break;
@@ -590,7 +588,7 @@ class npc_scourge_hulk : public CreatureScript
                 killedByRitualStrike = false;
             }
 
-            uint32 GetData(uint32 type)
+            uint32 GetData(uint32 type) const
             {
                 return type == DATA_INCREDIBLE_HULK ? killedByRitualStrike : 0;
             }

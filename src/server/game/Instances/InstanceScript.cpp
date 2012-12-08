@@ -16,15 +16,18 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "InstanceScript.h"
-#include "DatabaseEnv.h"
-#include "Map.h"
-#include "Player.h"
-#include "GameObject.h"
 #include "Creature.h"
 #include "CreatureAI.h"
-#include "Log.h"
+#include "DatabaseEnv.h"
+#include "GameObject.h"
+#include "InstanceScript.h"
 #include "LFGMgr.h"
+#include "Log.h"
+#include "Map.h"
+#include "Player.h"
+#include "Pet.h"
+#include "WorldSession.h"
+#include "Opcodes.h"
 
 void InstanceScript::SaveToDB()
 {
@@ -328,7 +331,7 @@ void InstanceScript::DoUpdateAchievementCriteria(AchievementCriteriaTypes type, 
     if (!PlayerList.isEmpty())
         for (Map::PlayerList::const_iterator i = PlayerList.begin(); i != PlayerList.end(); ++i)
             if (Player* player = i->getSource())
-                player->UpdateAchievementCriteria(type, miscValue1, miscValue2, unit);
+                player->UpdateAchievementCriteria(type, miscValue1, miscValue2, 0, unit);
 }
 
 // Start timed achievement for all players in instance
