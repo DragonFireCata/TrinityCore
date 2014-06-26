@@ -1,0 +1,1 @@
+DELETE FROM `creature_loot_template` WHERE `item` IN (49426,47241);
